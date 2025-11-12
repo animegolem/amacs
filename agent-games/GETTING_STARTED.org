@@ -1,0 +1,299 @@
+#+TITLE: Getting Started with Agent Games
+#+AUTHOR: amacs
+#+DATE: 2025-11-06
+
+* Installation
+
+** Option 1: Load in Emacs session
+
+#+begin_src elisp
+;; Evaluate in *scratch* or any elisp buffer:
+(add-to-list 'load-path "/path/to/amacs/agent-games")
+(require 'agent-games)
+#+end_src
+
+** Option 2: Add to init.el
+
+#+begin_src elisp
+;; Add to ~/.emacs.d/init.el:
+(add-to-list 'load-path "/path/to/amacs/agent-games")
+(require 'agent-games)
+#+end_src
+
+* Playing Your First Game
+
+** Starting Candyland
+
+#+begin_src elisp
+M-x candyland-start RET
+#+end_src
+
+When prompted, enter player names separated by spaces:
+#+begin_example
+Players (space-separated): human agent-1
+#+end_example
+
+This creates a game with two players: you (=human=) and one AI agent placeholder (=agent-1=).
+
+** Game Controls
+
+The game opens in a special buffer called =*agent-game*=.
+
+| Key | Action         | Description                    |
+|-----+----------------+--------------------------------|
+| =r= | Roll           | Roll the die and move          |
+| =p= | Pass turn      | End your turn without rolling  |
+| =a= | View audit log | See complete action history    |
+| =?= | Help           | Show keybinding help           |
+| =q= | Quit window    | Close the game window          |
+
+** Understanding the Display
+
+#+begin_example
+═══════════════════════════════════════════════════════════════
+  CANDYLAND
+═══════════════════════════════════════════════════════════════
+
+Turn: 3  |  Phase: playing  |  Current Player: human
+
+Last Roll: yellow
+
+Board:
+START [human] - - - <5> - - - - <10> - [agent-1] - - <15> - - - - <20> - - - - <25> - - - - FINISH
+
+Players:
+  human: Position 3
+  agent-1: Position 11
+
+───────────────────────────────────────────────────────────────
+  [r] Roll  [p] Pass  [a] Audit  [q] Quit  [?] Help
+#+end_example
+
+- *Turn counter:* Number of moves taken
+- *Current Player:* Whose turn it is (highlighted)
+- *Last Roll:* What color was just rolled
+- *Board:* Linear representation with player positions
+  - =[ ]=: Player at this position
+  - =< >=: Milestone marker (every 5 spaces)
+  - =-=: Regular space
+- *Players:* List of all players and their positions
+
+* Game Rules (Simplified Candyland)
+
+1. Players start at position 0
+2. On your turn, press =r= to roll the die
+3. Die shows one of 6 colors: red, blue, yellow, green, purple, orange
+4. Move to the next space of that color
+5. Turn automatically advances to next player
+6. First player to reach position 30 wins
+
+* Example Game Session
+
+#+begin_src elisp
+;; Start game
+M-x candyland-start RET
+Players: human agent-1 RET
+
+;; In game buffer:
+;; Press 'r' to roll
+;; Result: "human rolled yellow: 0 → 3"
+
+;; Turn automatically passes to agent-1
+;; Press 'r' again to roll for agent-1 (for now, human plays all agents)
+;; Result: "agent-1 rolled red: 0 → 2"
+
+;; Continue taking turns until someone reaches position 30
+;; Winner is announced: "🎉 human WINS! 🎉"
+#+end_src
+
+* Viewing the Audit Log
+
+Press =a= in the game buffer to open the audit log:
+
+#+begin_example
+[14:20:00] game-init: {"players":["human","agent-1"],"board-length":30}
+[14:20:05] move: {"player":"human","roll":"yellow","old-pos":0,"new-pos":3}
+[14:20:05] turn-end: {"agent":"human","next":"agent-1"}
+[14:20:10] move: {"player":"agent-1","roll":"red","old-pos":0,"new-pos":2}
+[14:20:10] turn-end: {"agent":"agent-1","next":"human"}
+[14:20:15] move: {"player":"human","roll":"blue","old-pos":3,"new-pos":7}
+...
+[14:22:30] game-end: {"winner":"human","final-position":30}
+#+end_example
+
+This log is also saved to disk at =~/.emacs.d/agent-games/audit/YYYY-MM-DD-candyland.jsonl=
+
+* Programmatic Usage
+
+** Starting a game programmatically
+
+#+begin_src elisp
+(candyland-start '(player-1 player-2 player-3))
+#+end_src
+
+** Querying game state
+
+#+begin_src elisp
+;; Get current player
+(agent-game-state-get 'current-player)
+;; => player-1
+
+;; Get player position
+(candyland-get-position 'player-1)
+;; => 5
+
+;; Check if game is over
+(agent-game-state-get 'winner)
+;; => nil (or 'player-1 if game ended)
+#+end_src
+
+** Taking actions programmatically
+
+#+begin_src elisp
+;; Roll for current player
+(candyland-do-roll 'player-1)
+;; => ((player . player-1) (roll . yellow) (old-pos . 0) (new-pos . 3))
+
+;; Pass turn
+(agent-game-arbiter-end-turn 'player-1)
+;; => player-2
+#+end_src
+
+** Using agent skills
+
+#+begin_src elisp
+;; Check if it's your turn
+(candyland-agent-is-my-turn-p 'agent-1)
+;; => t or nil
+
+;; Get your position
+(candyland-agent-get-position 'agent-1)
+;; => 8
+
+;; Get all positions
+(candyland-agent-get-all-positions)
+;; => ((human . 3) (agent-1 . 8))
+
+;; Roll (validates turn automatically)
+(candyland-agent-roll 'agent-1)
+;; => ((player . agent-1) (roll . blue) (old-pos . 8) (new-pos . 12))
+#+end_src
+
+* Agent Memory (Future)
+
+Currently, agent memory isolation is implemented but not actively used since we don't have AI agents yet. When AI agents are integrated, they will:
+
+1. Read their memory at turn start:
+   #+begin_example
+   ~/.emacs.d/agent-games/games/candyland/agents/agent-1/
+   ├── memory/
+   │   └── game-state.org
+   └── scratch.org
+   #+end_example
+
+2. Update their memory after actions:
+   #+begin_src org
+   * Current Position
+   8
+
+   * Game History
+   ** [14:20:05] Rolled yellow: 0 → 3
+   ** [14:20:15] Rolled blue: 3 → 8
+   #+end_src
+
+3. Cannot see other agents' memory (enforced by file system)
+
+* Testing Turn Enforcement
+
+Try to take a turn out of order to see the arbiter in action:
+
+#+begin_src elisp
+;; Start game with player-1's turn
+(candyland-start '(player-1 player-2))
+
+;; Try to act as player-2 (should fail)
+(candyland-do-roll 'player-2)
+;; Error: "Not your turn (current player: player-1)"
+
+;; Correct: act as player-1
+(candyland-do-roll 'player-1)
+;; Success!
+
+;; Now player-2 can act
+(candyland-do-roll 'player-2)
+;; Success!
+#+end_src
+
+* Debugging
+
+** Check game state
+
+#+begin_src elisp
+M-x agent-games-status
+;; => "Game: candyland | Phase: playing | Turn: 5 | Current Player: human"
+#+end_src
+
+** View raw game state
+
+#+begin_src elisp
+agent-game-state
+;; => ((type . candyland)
+;;     (phase . playing)
+;;     (players player-1 player-2)
+;;     (current-player . player-1)
+;;     (board (positions (player-1 . 5) (player-2 . 3))
+;;            (last-roll . yellow)
+;;            (length . 30))
+;;     (history ...)
+;;     (winner . nil)
+;;     (turn-count . 5))
+#+end_src
+
+** Query audit log
+
+#+begin_src elisp
+;; Find all moves by player-1
+(agent-game-audit-query
+ (lambda (entry)
+   (and (eq (alist-get 'action entry) 'move)
+        (eq (alist-get 'player entry) 'player-1))))
+#+end_src
+
+** Reset game
+
+#+begin_src elisp
+;; Start a new game (overwrites current state)
+(candyland-start '(human agent-1))
+#+end_src
+
+* Next Steps
+
+1. *Play a full game* - Get familiar with the interface
+2. *Review the code* - See =agent-games/games/candyland/candyland.el=
+3. *Read the architecture docs* - See =agent-games/README.org=
+4. *Understand the PRD* - See the Product Requirements Document
+
+The goal is to understand how this simple game validates the core multi-agent architecture before moving to more complex games (Uno, Fiasco) and eventually a coding assistant.
+
+* Common Issues
+
+** "No game in progress"
+You need to start a game first with =M-x candyland-start=
+
+** "Not your turn"
+The arbiter is working! You tried to act out of turn. Wait for your turn or check who the current player is.
+
+** Emacs freezes
+The game should never freeze - all operations are synchronous. If this happens, file a bug report.
+
+** Audit log is empty
+The audit system may not be initialized. Try starting a new game.
+
+* Questions?
+
+- Framework: See =agent-games/README.org=
+- Rules: See =agent-games/games/candyland/rules.org=
+- PRD: See the Product Requirements Document
+- Code: Browse =agent-games/= directory
+
+Have fun validating multi-agent architectures through games!

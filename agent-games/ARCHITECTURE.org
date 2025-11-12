@@ -1,0 +1,457 @@
+#+TITLE: Agent Games Architecture
+#+AUTHOR: amacs
+#+DATE: 2025-11-06
+
+* System Overview
+
+#+begin_example
+┌─────────────────────────────────────────────────────────────────┐
+│                         USER / AI AGENTS                         │
+│  (human, agent-1, GPT-4, Claude, Gemini, etc.)                  │
+└──────────────────────┬──────────────────────────────────────────┘
+                       │
+                       │ Commands (roll, pass, etc.)
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                         TURN ARBITER                             │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  • Validates whose turn it is                            │  │
+│  │  • Provides locking mechanism (prevents race conditions) │  │
+│  │  • Logs conflicts to audit trail                         │  │
+│  │  • Auto-advances turns after actions                     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└──────────────┬──────────────────────────────────┬───────────────┘
+               │                                  │
+               │ Validated Actions                │ Read State
+               │                                  │
+               ▼                                  ▼
+┌──────────────────────────────┐    ┌──────────────────────────────┐
+│     SHARED GAME STATE        │◄───│      AGENT MEMORY            │
+│  ┌────────────────────────┐  │    │  ┌────────────────────────┐  │
+│  │  Single source of      │  │    │  │ Per-agent isolated     │  │
+│  │  truth for game        │  │    │  │ filesystems:           │  │
+│  │                        │  │    │  │                        │  │
+│  │  • type: candyland     │  │    │  │ agents/agent-1/        │  │
+│  │  • current-player      │  │    │  │   memory/              │  │
+│  │  • board state         │  │    │  │     game-state.org     │  │
+│  │  • positions           │  │    │  │   scratch.org          │  │
+│  │  • winner              │  │    │  │                        │  │
+│  │  • history             │  │    │  │ agents/agent-2/        │  │
+│  │                        │  │    │  │   memory/              │  │
+│  │  Read: All agents      │  │    │  │   ...                  │  │
+│  │  Write: Arbiter only   │  │    │  │                        │  │
+│  └────────────────────────┘  │    │  │ Agents CANNOT see      │  │
+└───────────┬──────────────────┘    │  │ each other's memory    │  │
+            │                       │  └────────────────────────┘  │
+            │                       └──────────────────────────────┘
+            │ Updates
+            ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                       AUDIT LOGGER                               │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  JSONL format: audit/YYYY-MM-DD-{game}.jsonl             │  │
+│  │                                                            │  │
+│  │  {"ts": 1699286400, "action": "move", "player": "p1"...}  │  │
+│  │  {"ts": 1699286401, "action": "turn-end", ...}            │  │
+│  │  {"ts": 1699286402, "action": "conflict", ...}            │  │
+│  │                                                            │  │
+│  │  Used for: Debugging, analysis, replay                    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+                         │ Read for display
+                         ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                        RENDERER                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  ASCII Board Display (*agent-game* buffer)               │  │
+│  │                                                            │  │
+│  │  ═══════════════════════════════════════════════          │  │
+│  │    CANDYLAND                                              │  │
+│  │  ═══════════════════════════════════════════════          │  │
+│  │                                                            │  │
+│  │  Turn: 5 | Current Player: human                          │  │
+│  │                                                            │  │
+│  │  Board:                                                    │  │
+│  │  START [human]-<5>-[agent-1]--<10>--<15>---FINISH        │  │
+│  │                                                            │  │
+│  │  [r] Roll [p] Pass [a] Audit [q] Quit                     │  │
+│  └──────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────┘
+#+end_example
+
+* Data Flow
+
+** Player Takes Turn
+
+#+begin_example
+1. Player presses 'r' (roll) in game buffer
+           │
+           ▼
+2. Command handler calls: candyland-do-roll(player-id)
+           │
+           ▼
+3. Arbiter validates:
+   - Is it player's turn?
+   - Is game still active?
+   - Can acquire lock?
+           │
+           ├─► NO: Error thrown, logged to audit
+           │
+           ▼ YES
+4. Game logic executes:
+   - Roll die (random color)
+   - Find next space of that color
+   - Update position in game state
+           │
+           ▼
+5. Audit log records action:
+   {"ts": ..., "action": "move", "player": "p1", "roll": "yellow", ...}
+           │
+           ▼
+6. Memory updated (if agent):
+   agents/player-id/memory/game-state.org
+   "** [14:20] Rolled yellow: 3 → 8"
+           │
+           ▼
+7. Check for winner:
+   Position >= 30? Set winner, end game
+           │
+           ▼
+8. Turn advances (if not game over):
+   current-player = next-player
+           │
+           ▼
+9. Arbiter releases lock
+           │
+           ▼
+10. Renderer refreshes display
+#+end_example
+
+** Agent Queries State
+
+#+begin_example
+1. Agent calls: (candyland-agent-get-position 'agent-1)
+           │
+           ▼
+2. Skill reads from shared game state:
+   board → positions → (agent-1 . 8)
+           │
+           ▼
+3. Returns: 8
+           │
+           ▼
+4. No audit log (read-only operation)
+5. No state changes
+#+end_example
+
+* Component Dependencies
+
+#+begin_example
+agent-games.el (entry point)
+    │
+    ├──► core/agent-game-state.el (shared state)
+    │         │
+    │         └──► Used by: arbiter, render, games
+    │
+    ├──► core/agent-game-arbiter.el (turn coordination)
+    │         │
+    │         ├──► Depends: agent-game-state
+    │         ├──► Depends: agent-game-audit
+    │         └──► Used by: games
+    │
+    ├──► core/agent-game-audit.el (logging)
+    │         │
+    │         └──► Used by: arbiter, games, render
+    │
+    ├──► core/agent-game-render.el (display)
+    │         │
+    │         ├──► Depends: agent-game-state
+    │         └──► Used by: user commands
+    │
+    ├──► core/agent-game-memory.el (agent isolation)
+    │         │
+    │         └──► Used by: games, agent skills
+    │
+    └──► games/candyland/candyland.el (game logic)
+              │
+              ├──► Depends: all core modules
+              ├──► Provides: candyland-* functions
+              │
+              └──► skills/ (agent-accessible APIs)
+                      │
+                      ├──► dice-roller.el
+                      └──► position-tracker.el
+#+end_example
+
+* Isolation Guarantees
+
+** Agent Memory Isolation
+
+#+begin_example
+Agent 1 can:                Agent 2 can:
+✓ Read: agent-1/memory/     ✓ Read: agent-2/memory/
+✓ Write: agent-1/memory/    ✓ Write: agent-2/memory/
+✓ Read: shared game state   ✓ Read: shared game state
+✗ Read: agent-2/memory/     ✗ Read: agent-1/memory/
+✗ Write: game state         ✗ Write: game state
+✗ Write: other agents       ✗ Write: other agents
+#+end_example
+
+** State Modification
+
+#+begin_example
+│                          │ Shared State │ Agent Memory │ Audit Log │
+├──────────────────────────┼──────────────┼──────────────┼───────────┤
+│ Agents (via skills)      │ Read         │ R/W (own)    │ Read      │
+│ Game logic               │ R/W          │ R/W (any)    │ Write     │
+│ Arbiter                  │ R/W          │ -            │ Write     │
+│ Renderer                 │ Read         │ -            │ Read      │
+│ Audit logger             │ Read         │ -            │ Write     │
+#+end_example
+
+* Concurrency Control
+
+** Lock-Based Turn Taking
+
+#+begin_example
+agent-game-arbiter-lock = nil   (initially)
+
+Player 1 calls: candyland-do-roll('player-1')
+    │
+    ├─► Arbiter checks:
+    │       • current-player == 'player-1'? YES
+    │       • lock == nil? YES
+    │
+    ├─► Acquire lock: agent-game-arbiter-lock = 'player-1'
+    │
+    ├─► Execute game action...
+    │
+    └─► Release lock: agent-game-arbiter-lock = nil
+
+If Player 2 tries to act while lock is held:
+    │
+    ├─► Arbiter checks:
+    │       • lock == nil? NO (lock = 'player-1')
+    │
+    ├─► Log conflict to audit
+    │
+    └─► Error: "Agent player-2 cannot act right now"
+#+end_example
+
+** Conflict Resolution
+
+All conflicts are:
+1. Prevented (lock mechanism)
+2. Logged (audit trail)
+3. Reported (error messages)
+
+No silent failures.
+
+* Extensibility Points
+
+** Adding a New Game
+
+1. Create =games/newgame/= directory
+2. Define game state structure
+3. Implement game rules in =newgame.el=
+4. Create skills in =skills/=
+5. Add renderer support in =agent-game-render.el=
+6. Register in =agent-games.el=
+
+** Adding a New Agent Type
+
+1. Implement agent interface:
+   #+begin_src elisp
+   (defun agent-newtype-take-turn (agent-id)
+     "Agent decides and executes action."
+     ;; 1. Read memory
+     ;; 2. Query game state via skills
+     ;; 3. Decide action
+     ;; 4. Execute via game commands
+     ;; 5. Update memory
+     )
+   #+end_src
+
+2. Register agent:
+   #+begin_src elisp
+   (agent-game-register 'my-agent
+     :type 'newtype
+     :handler #'agent-newtype-take-turn)
+   #+end_src
+
+** Adding a New Skill
+
+1. Create =skills/new-skill.el=
+2. Implement skill function:
+   #+begin_src elisp
+   (defun game-agent-new-skill (agent-id &rest args)
+     "Skill description."
+     ;; Read from game state (read-only!)
+     ;; Return useful information
+     )
+   #+end_src
+3. Document in skill registry
+4. Provide to agents in prompt
+
+* Security Considerations
+
+** Memory Isolation
+
+Enforced by:
+- Filesystem paths (=agents/{agent-id}/=)
+- Convention (agents use skills, not direct access)
+
+Future: Consider sandboxing agents if they run untrusted code.
+
+** State Integrity
+
+Protected by:
+- Arbiter validates all modifications
+- Agents cannot directly modify shared state
+- All changes logged
+
+** Audit Integrity
+
+- Append-only log
+- Timestamped
+- Not modifiable by agents
+
+* Performance Characteristics
+
+** Current Implementation
+
+- *Synchronous:* All actions block until complete
+- *In-memory state:* No database, just elisp variables
+- *File-based memory:* Agents read/write org files
+- *Append-only audit:* JSONL files
+
+** Scaling Considerations
+
+Current design handles:
+- ✓ 2-5 agents per game (tested)
+- ✓ Games up to 100 turns (tested)
+- ✓ Memory per agent: ~10KB (typical)
+- ✓ Audit log: ~1MB per long game
+
+Future scaling needs:
+- 10+ agents: May need async coordination
+- 1000+ turns: May need state snapshots
+- Persistent games: Need save/load mechanism
+
+* Testing Strategy
+
+** Unit Tests
+
+Each component testable in isolation:
+- State: Initialize, get, set, history
+- Arbiter: Turn validation, lock acquisition
+- Audit: Log, query, filter
+- Memory: Read, write, isolation
+
+** Integration Tests
+
+Full game simulation:
+- Start game
+- Execute N turns
+- Verify winner
+- Check audit trail
+- Validate memory updates
+
+** Validation Tests
+
+Game-specific correctness:
+- Rules followed?
+- No invalid moves?
+- Turn order maintained?
+- Winner declared correctly?
+
+* Debugging Tools
+
+** Available Commands
+
+- =agent-games-status= - Quick game state summary
+- =agent-game-audit-view= - Open audit log buffer
+- =agent-game-render-refresh= - Redraw game board
+
+** Inspecting State
+
+#+begin_src elisp
+;; View full game state
+agent-game-state
+
+;; Check arbiter lock
+agent-game-arbiter-lock
+
+;; View audit file path
+agent-game-audit-file
+
+;; Query specific history
+(agent-game-audit-query
+ (lambda (e) (eq (alist-get 'action e) 'conflict)))
+#+end_src
+
+** Common Debug Scenarios
+
+*** "Why didn't my turn work?"
+Check: ~agent-game-state-get 'current-player~
+
+*** "Are turns being logged?"
+Check: ~agent-game-audit-view~
+
+*** "What's the agent's memory?"
+Check: ~~/.emacs.d/agent-games/games/{game}/agents/{agent-id}/~
+
+*** "Why is the lock stuck?"
+Check: ~agent-game-arbiter-lock~ (should be nil between turns)
+
+* Future Architecture Evolution
+
+** Phase 1.5: AI Integration
+- Add async agent execution
+- Implement agent prompt templates
+- Support multiple models (Claude, GPT, Gemini)
+
+** Phase 2: Uno
+- Event-driven actions (not just turns)
+- Partial information (hidden hands)
+- Strategic decision making
+
+** Phase 3: Fiasco
+- Complex judgment calls
+- Long-term memory (2+ hours)
+- Collaborative creativity
+
+** Phase 4: Coding Assistant
+- Apply to "help user code"
+- Project context as memory
+- "Is user stuck?" as judgment
+- Multiple models collaborating
+
+* Design Principles
+
+1. *Explicit is better than implicit*
+   - Clear turn order
+   - Obvious state updates
+   - Logged actions
+
+2. *Fail fast and loud*
+   - Validation errors thrown immediately
+   - Conflicts logged to audit
+   - No silent failures
+
+3. *Measurable everything*
+   - Every action logged
+   - State fully inspectable
+   - Success criteria binary
+
+4. *Human-readable formats*
+   - Org-mode for memory
+   - JSONL for logs
+   - ASCII for board
+
+5. *Games validate architecture*
+   - Simple games = simple validation
+   - Complex games = complex validation
+   - Real task = proven architecture
