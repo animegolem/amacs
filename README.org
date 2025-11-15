@@ -1,4 +1,4 @@
-#+TITLE: Agentic Emacs (amacs)
+#+TITLE: Agentic Macros (amacs)
 
 * Overview
 
