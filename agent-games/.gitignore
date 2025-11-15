@@ -1,0 +1,18 @@
+# API keys and sensitive configuration
+agent-game-config.el
+
+# Agent memory directories (can get large)
+games/*/agents/
+
+# Audit logs
+audit/
+
+# Emacs autosave and backup files
+*~
+\#*\#
+.\#*
+*.elc
+
+# OS files
+.DS_Store
+Thumbs.db

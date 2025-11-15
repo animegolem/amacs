@@ -25,6 +25,8 @@
     (define-key map (kbd "q") 'quit-window)
     (define-key map (kbd "a") 'agent-game-audit-view)
     (define-key map (kbd "?") 'agent-game-render-help)
+    (define-key map (kbd "SPC") 'agent-game-agent-trigger-ai-turn)
+    (define-key map (kbd "TAB") 'agent-game-agent-toggle-auto-play)
     map)
   "Keymap for agent game render buffer.")
 
@@ -36,7 +38,7 @@
 (defun agent-game-render-help ()
   "Show help for game commands."
   (interactive)
-  (message "r: Roll | p: Pass turn | a: Audit log | q: Quit | ?: Help"))
+  (message "r: Roll | p: Pass | SPC: AI turn | TAB: Auto-play | a: Audit | q: Quit | ?: Help"))
 
 (defun agent-game-render-get-buffer ()
   "Get or create the game render buffer."
@@ -95,7 +97,7 @@
    (propertize "\n───────────────────────────────────────────────────────────────\n"
                'face 'shadow))
   (agent-game-render-insert
-   (propertize "  [r] Roll  [p] Pass  [a] Audit  [q] Quit  [?] Help\n"
+   (propertize "  [r] Roll  [p] Pass  [SPC] AI Turn  [TAB] Auto-play  [a] Audit  [?] Help\n"
                'face 'shadow))
 
   ;; Show winner if game is over

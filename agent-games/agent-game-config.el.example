@@ -1,0 +1,58 @@
+;;; agent-game-config.el --- Configuration for Agent Games -*- lexical-binding: t; -*-
+
+;; Copyright (C) 2025
+
+;; Author: amacs
+;; Keywords: games, agents, config
+
+;;; Commentary:
+
+;; Configuration file for Agent Games.
+;; Copy this file to agent-game-config.el and fill in your API keys.
+;; The .gitignore should exclude agent-game-config.el to keep keys private.
+
+;;; Code:
+
+;;; API Keys
+
+;; OpenRouter API Key
+;; Get yours at: https://openrouter.ai/keys
+(setq agent-game-openai-api-key "sk-or-v1-YOUR-KEY-HERE")
+
+;; OpenRouter settings (optional)
+(setq agent-game-openai-base-url "https://openrouter.ai/api/v1")
+(setq agent-game-openai-site-url "https://github.com/animegolem/amacs")
+(setq agent-game-openai-app-name "Agent-Games-Framework")
+
+;; If using native OpenAI instead:
+;; (setq agent-game-openai-base-url "https://api.openai.com/v1")
+;; (setq agent-game-openai-api-key "sk-YOUR-OPENAI-KEY-HERE")
+
+;; If using local Ollama (no API key needed):
+;; (setq agent-game-openai-base-url "http://localhost:11434/v1")
+;; (setq agent-game-openai-api-key "ollama")  ; dummy value
+
+;;; Default Agent Settings
+
+;; Auto-play: If t, AI agents automatically take turns
+(setq agent-game-agent-auto-play t)
+
+;; Default provider for AI agents
+(setq agent-game-default-provider "openrouter")
+
+;; Default models for different providers
+(setq agent-game-default-models
+      '((openrouter . "anthropic/claude-3.5-sonnet")
+        (openai . "gpt-4o-mini")
+        (ollama . "granite3-dense:8b")))
+
+;;; Game Settings
+
+;; Enable verbose logging
+(setq agent-game-verbose t)
+
+;; Delay between AI turns (seconds)
+(setq agent-game-ai-turn-delay 1.0)
+
+(provide 'agent-game-config)
+;;; agent-game-config.el ends here

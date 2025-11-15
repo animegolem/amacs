@@ -37,6 +37,15 @@
 (require 'agent-game-audit)
 (require 'agent-game-render)
 (require 'agent-game-memory)
+(require 'agent-game-provider)
+(require 'agent-game-agent)
+
+;; Load configuration (if exists)
+(let ((config-file (expand-file-name "agent-game-config.el"
+                                      (file-name-directory
+                                       (or load-file-name buffer-file-name)))))
+  (when (file-exists-p config-file)
+    (load config-file t)))
 
 ;; Load games
 (require 'candyland)
@@ -50,7 +59,7 @@
 (defun agent-games-version ()
   "Return the version of agent-games."
   (interactive)
-  (message "agent-games version 0.1.0"))
+  (message "agent-games version 0.2.0 (AI agents enabled)"))
 
 (defun agent-games-status ()
   "Show current game status."
@@ -58,6 +67,44 @@
   (if agent-game-state
       (message "%s" (agent-game-state-to-string))
     (message "No game in progress")))
+
+;;; AI Agent Helpers
+
+;;;###autoload
+(defun candyland-start-ai (human-players ai-players &optional provider model)
+  "Start Candyland with HUMAN-PLAYERS and AI-PLAYERS.
+HUMAN-PLAYERS and AI-PLAYERS are lists of symbols.
+PROVIDER defaults to 'openrouter', MODEL defaults to 'anthropic/claude-3.5-sonnet'.
+
+Example:
+  (candyland-start-ai '(human) '(claude gpt gemini)
+                      \"openrouter\" \"anthropic/claude-3.5-sonnet\")"
+  (interactive
+   (list
+    (let ((input (read-string "Human players (space-separated): " "human")))
+      (if (string-empty-p input) nil
+        (mapcar #'intern (split-string input))))
+    (let ((input (read-string "AI players (space-separated): " "claude")))
+      (mapcar #'intern (split-string input)))
+    (read-string "Provider (openrouter/openai/ollama): " "openrouter")
+    (read-string "Model: " "anthropic/claude-3.5-sonnet")))
+
+  (let ((provider (or provider "openrouter"))
+        (model (or model "anthropic/claude-3.5-sonnet"))
+        (all-players (append human-players ai-players)))
+
+    ;; Register all players
+    (dolist (player human-players)
+      (agent-game-agent-register player 'human))
+
+    (dolist (player ai-players)
+      (agent-game-agent-register player 'ai provider model))
+
+    ;; Start game
+    (candyland-start all-players)
+
+    (message "Game started! Humans: %s | AI (%s/%s): %s | Press SPC for AI turn, TAB for auto-play"
+             human-players provider model ai-players)))
 
 ;;; Setup
 
