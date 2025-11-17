@@ -1,0 +1,279 @@
+#+TITLE: Agent Games - Multi-Agent Validation Framework
+#+AUTHOR: amacs
+#+DATE: 2025-11-06
+
+* Overview
+
+Agent Games is a framework for validating multi-agent AI architectures through progressively complex games. Instead of building a coding assistant directly and testing it on subjective "helpfulness," we validate the core architecture through games with well-defined rules and measurable success criteria.
+
+*Current Status:* Candyland (Phase 1) - Basic MVP ✓
+
+* Quick Start
+
+** Installation
+
+#+begin_src elisp
+;; Add to your ~/.emacs.d/init.el or evaluate:
+(add-to-list 'load-path "/path/to/amacs/agent-games")
+(require 'agent-games)
+#+end_src
+
+** Playing Candyland
+
+#+begin_src elisp
+;; Start a game with a human and one AI agent
+M-x candyland-start RET human agent-1 RET
+
+;; In the game buffer:
+;; r - Roll die
+;; p - Pass turn
+;; a - View audit log
+;; ? - Help
+;; q - Quit window
+#+end_src
+
+* Architecture
+
+** Directory Structure
+
+#+begin_example
+agent-games/
+├── agent-games.el          # Main entry point
+├── core/                   # Core framework
+│   ├── agent-game-state.el     # Shared game state
+│   ├── agent-game-arbiter.el   # Turn coordination
+│   ├── agent-game-render.el    # ASCII display
+│   ├── agent-game-audit.el     # Logging
+│   └── agent-game-memory.el    # Agent memory isolation
+└── games/
+    └── candyland/          # Candyland implementation
+        ├── rules.org           # Human-readable rules
+        ├── candyland.el        # Game logic
+        ├── skills/             # Agent-accessible tools
+        │   ├── dice-roller.el
+        │   └── position-tracker.el
+        └── agents/             # (Created at runtime)
+            ├── agent-1/
+            │   ├── memory/
+            │   │   └── game-state.org
+            │   └── scratch.org
+            └── human/
+                └── (same structure)
+#+end_example
+
+** Core Components
+
+*** Shared Game State
+Single source of truth for all game information. All agents can read, but only the arbiter can modify.
+
+#+begin_src elisp
+agent-game-state  ; Global variable containing:
+  ((type . candyland)
+   (phase . playing)
+   (current-player . human)
+   (board . ((positions . ((human . 0) (agent-1 . 0)))
+             (last-roll . nil)
+             (length . 30)))
+   (history . (...))
+   (winner . nil)
+   (turn-count . 0))
+#+end_src
+
+*** Turn Arbiter
+Ensures only one agent can act at a time. Prevents race conditions and enforces fair play.
+
+- Validates turn order
+- Provides locking mechanism
+- Logs conflicts to audit trail
+- Auto-advances turns
+
+*** Agent Memory
+Each agent has isolated filesystem namespace:
+
+#+begin_example
+~/.emacs.d/agent-games/games/candyland/agents/agent-1/
+├── memory/
+│   └── game-state.org    # Persistent memory
+└── scratch.org           # Ephemeral notes
+#+end_example
+
+Agents *cannot* see other agents' memory - only shared game state.
+
+*** Audit Trail
+Every action logged in JSONL format:
+
+#+begin_src jsonl
+{"ts": 1730899200, "action": "game-init", "players": ["human", "agent-1"]}
+{"ts": 1730899201, "action": "move", "player": "human", "roll": "yellow", "old-pos": 0, "new-pos": 3}
+{"ts": 1730899202, "action": "turn-end", "agent": "human", "next": "agent-1"}
+#+end_src
+
+View with ~M-x agent-game-audit-view~ or ~a~ in game buffer.
+
+* Game Implementation: Candyland
+
+** Rules (Simplified)
+
+1. Players start at position 0
+2. Roll a 6-color die (red, blue, yellow, green, purple, orange)
+3. Move to next space of that color
+4. First to position 30 wins
+
+** Why Candyland?
+
+- *Deterministic:* No judgment calls, just rule following
+- *Turn-based:* Clear "my turn" signal
+- *No interaction:* Agents don't affect each other directly
+- *Measurable success:* Game ends with clear winner
+
+** Board Representation
+
+Simple linear ASCII board:
+
+#+begin_example
+Board:
+START [human] - - - <5> - - - - <10> - [agent-1] - - <15> - - - - <20> - - - - <25> - - - - FINISH
+
+Players:
+  human: Position 1
+  agent-1: Position 11
+#+end_example
+
+** Skills Available to Agents
+
+*** dice-roller.el
+#+begin_src elisp
+(candyland-agent-roll agent-id)
+;; => ((player . agent-1) (roll . yellow) (old-pos . 5) (new-pos . 8))
+#+end_src
+
+*** position-tracker.el
+#+begin_src elisp
+(candyland-agent-get-position 'agent-1)      ; => 8
+(candyland-agent-get-all-positions)          ; => ((human . 3) (agent-1 . 8))
+(candyland-agent-is-my-turn-p 'agent-1)      ; => t or nil
+(candyland-agent-get-winner)                 ; => nil or 'agent-1
+#+end_src
+
+* Agent Integration (TODO)
+
+Future work will add:
+
+1. *Agent API:* Standard interface for AI agents to query state and take actions
+2. *Multi-model support:* Claude, GPT, Gemini playing together
+3. *Prompt templates:* Standard prompts for agents to understand rules
+4. *Memory persistence:* Agents remember across sessions
+
+** Planned Agent Interface
+
+#+begin_src elisp
+(agent-game-register 'agent-1
+  :provider 'anthropic
+  :model "claude-sonnet-4.5"
+  :memory-enabled t)
+
+(agent-game-take-turn 'agent-1)
+;; Agent automatically:
+;; 1. Reads its memory
+;; 2. Queries game state
+;; 3. Decides action (roll/pass)
+;; 4. Updates memory
+;; 5. Passes turn
+#+end_src
+
+* Testing
+
+** Manual Testing
+
+#+begin_src elisp
+;; Start a game
+(candyland-start '(human agent-1))
+
+;; Play manually by pressing 'r' to roll
+;; Verify:
+;; - Turn order is enforced
+;; - Positions update correctly
+;; - Winner is declared
+;; - Audit log is accurate
+#+end_src
+
+** Success Criteria
+
+- [X] 2 players can complete a game
+- [X] Turn order is enforced (arbiter prevents conflicts)
+- [X] Board state updates correctly
+- [X] Winner is declared when reaching position 30
+- [X] Audit log captures all actions
+- [ ] Agent memory is isolated (verified with 2 AI agents)
+- [ ] Agents can query state through skills
+- [ ] Agents update their memory after actions
+
+* Roadmap
+
+** Phase 1: Candyland (Current) ✓
+- [X] Core framework (state, arbiter, render, audit)
+- [X] Candyland game logic
+- [X] Human player support
+- [ ] AI agent integration
+- [ ] Memory isolation verification
+
+** Phase 2: Uno (Week 2-3)
+- [ ] Event-driven actions (not just turns)
+- [ ] Partial information (hands)
+- [ ] Strategic choices
+- [ ] Agent-agent interaction
+
+** Phase 3: Fiasco (Week 4)
+- [ ] Complex judgment calls
+- [ ] Long-term memory (2-hour sessions)
+- [ ] Collaborative storytelling
+- [ ] Subjective success metrics
+
+** Phase 4: Coding Assistant
+- [ ] Apply validated architecture to "help user code"
+- [ ] Memory = project context
+- [ ] Judgment = "is user stuck?"
+- [ ] Coordination = multiple models watching
+
+* Development Notes
+
+** Current Limitations
+
+1. *No AI agents yet:* Only human players can play (next priority)
+2. *Simple board:* Candyland board is basic repeating pattern
+3. *No persistence:* Games don't save between sessions
+4. *Manual turn-taking:* No automatic agent play
+
+** Design Decisions
+
+*** Why Org-mode for memory?
+- Human-readable (easy debugging)
+- Structured (properties, headers)
+- Emacs-native (no dependencies)
+- Extensible (can add TODO states, tags)
+
+*** Why JSONL for audit logs?
+- Streamable (append-only)
+- Parseable (jq, grep)
+- Standard format
+- Queryable
+
+*** Why ASCII board?
+- Fast to render
+- Works in terminal
+- No GUI dependencies
+- Easy to parse for agents
+
+* Contributing
+
+This is currently a research project. See the main PRD for full vision and design rationale.
+
+* License
+
+Copyright (C) 2025
+
+* Questions?
+
+See ~games/candyland/rules.org~ for Candyland-specific rules.
+
+For architecture questions, see the PRD (Product Requirements Document).

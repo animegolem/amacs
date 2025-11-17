@@ -1,0 +1,355 @@
+#+TITLE: AI Agent Setup Guide
+#+AUTHOR: amacs
+#+DATE: 2025-11-15
+
+* Overview
+
+This guide shows you how to configure AI agents to play Agent Games using various LLM providers:
+- *OpenRouter* - Access to Claude, GPT, Gemini, Llama, etc. (recommended)
+- *OpenAI* - Direct access to GPT models
+- *Ollama* - Local models (Granite, Llama, etc.)
+
+* Quick Start (OpenRouter)
+
+** 1. Get API Key
+
+Visit https://openrouter.ai/keys and create an API key.
+
+** 2. Configure
+
+#+begin_src bash
+cd /path/to/amacs/agent-games
+cp agent-game-config.el.example agent-game-config.el
+#+end_src
+
+Edit =agent-game-config.el= and set your API key:
+
+#+begin_src elisp
+(setq agent-game-openai-api-key "sk-or-v1-YOUR-KEY-HERE")
+#+end_src
+
+** 3. Start Game
+
+#+begin_src elisp
+;; In Emacs:
+(add-to-list 'load-path "/path/to/amacs/agent-games")
+(require 'agent-games)
+
+;; Start game with AI agents
+M-x candyland-start-ai RET
+Human players: human RET
+AI players: claude RET
+Provider: openrouter RET
+Model: anthropic/claude-3.5-sonnet RET
+#+end_src
+
+** 4. Play
+
+- Press =r= when it's your (human) turn to roll
+- Press =SPC= when it's an AI turn to trigger the AI
+- Press =TAB= to toggle auto-play (AI agents play automatically)
+
+* Configuration Options
+
+** OpenRouter (Recommended)
+
+Access many models through one API:
+
+#+begin_src elisp
+;; In agent-game-config.el:
+(setq agent-game-openai-api-key "sk-or-v1-YOUR-KEY-HERE")
+(setq agent-game-openai-base-url "https://openrouter.ai/api/v1")
+#+end_src
+
+Available models:
+- =anthropic/claude-3.5-sonnet= (recommended)
+- =openai/gpt-4o=
+- =google/gemini-pro=
+- =meta-llama/llama-3.1-70b-instruct=
+- =qwen/qwen-2.5-72b-instruct=
+- See https://openrouter.ai/models for full list
+
+** OpenAI Direct
+
+Use native OpenAI API:
+
+#+begin_src elisp
+;; In agent-game-config.el:
+(setq agent-game-openai-api-key "sk-YOUR-OPENAI-KEY")
+(setq agent-game-openai-base-url "https://api.openai.com/v1")
+#+end_src
+
+Available models:
+- =gpt-4o= (recommended)
+- =gpt-4o-mini= (cheap and fast)
+- =gpt-4-turbo=
+- =gpt-3.5-turbo=
+
+** Ollama (Local)
+
+Run models locally with Ollama:
+
+1. Install Ollama: https://ollama.ai
+2. Pull a model: ~ollama pull granite3-dense:8b~
+3. Configure:
+
+#+begin_src elisp
+;; In agent-game-config.el:
+(setq agent-game-openai-base-url "http://localhost:11434/v1")
+(setq agent-game-openai-api-key "ollama")  ; dummy value
+#+end_src
+
+Available models (after pulling):
+- =granite3-dense:8b= (IBM Granite)
+- =qwen2.5:14b= (Alibaba Qwen)
+- =llama3.1:8b= (Meta Llama)
+- =mistral:latest=
+
+* Usage Examples
+
+** Single AI vs Human
+
+#+begin_src elisp
+(candyland-start-ai '(human) '(claude)
+                    "openrouter" "anthropic/claude-3.5-sonnet")
+#+end_src
+
+** Multiple AI Agents (Battle Royale!)
+
+#+begin_src elisp
+(candyland-start-ai
+ nil  ; no humans
+ '(claude gpt gemini llama)  ; 4 AI agents
+ "openrouter"
+ "anthropic/claude-3.5-sonnet")  ; all use same model for now
+#+end_src
+
+** Local Ollama Agent
+
+#+begin_src elisp
+(candyland-start-ai '(human) '(granite)
+                    "ollama" "granite3-dense:8b")
+#+end_src
+
+** Different Models (Advanced)
+
+To use different models per agent, register manually:
+
+#+begin_src elisp
+;; Register agents with different models
+(agent-game-agent-register 'claude 'ai "openrouter" "anthropic/claude-3.5-sonnet")
+(agent-game-agent-register 'gpt 'ai "openrouter" "openai/gpt-4o")
+(agent-game-agent-register 'gemini 'ai "openrouter" "google/gemini-pro")
+
+;; Start game
+(candyland-start '(claude gpt gemini))
+#+end_src
+
+* Game Controls
+
+| Key   | Action                          |
+|-------+---------------------------------|
+| =r=   | Roll (human player)             |
+| =SPC= | Trigger AI turn                 |
+| =TAB= | Toggle auto-play mode           |
+| =a=   | View audit log                  |
+| =?=   | Show help                       |
+| =q=   | Quit window                     |
+
+* Auto-Play Mode
+
+When auto-play is ON (press =TAB= to toggle):
+- AI agents automatically take their turns
+- Small delay between turns (configurable)
+- Game runs until completion
+- You can still take manual turns as human
+
+When auto-play is OFF:
+- You must press =SPC= to trigger each AI turn
+- Useful for watching AI decisions step-by-step
+
+* Monitoring AI Behavior
+
+** View AI Responses
+
+AI responses are logged to the =*Messages*= buffer:
+
+#+begin_example
+🤖 claude (openrouter/anthropic/claude-3.5-sonnet) is thinking...
+🤖 claude responded: ROLL
+claude rolled yellow: 0 → 3
+#+end_example
+
+** Audit Log
+
+Press =a= in game buffer to see complete action history:
+
+#+begin_example
+[14:20:00] game-init: {"players":["human","claude"]}
+[14:20:05] move: {"player":"human","roll":"yellow","old-pos":0,"new-pos":3}
+[14:20:10] move: {"player":"claude","roll":"red","old-pos":0,"new-pos":2}
+#+end_example
+
+** Agent Memory
+
+Check what AI agents remember:
+
+#+begin_src bash
+cat ~/.emacs.d/agent-games/games/candyland/agents/claude/memory/game-state.org
+#+end_src
+
+* Troubleshooting
+
+** "agent-game-openai-api-key not set"
+
+Solution: Create =agent-game-config.el= and set your API key.
+
+** "Failed to connect to https://openrouter.ai..."
+
+Check:
+1. Internet connection
+2. API key is valid
+3. API key has credits (OpenRouter requires prepaid credits)
+
+** "AI agent claude failed: ..."
+
+Check:
+1. Model name is correct
+2. Provider supports that model
+3. API key has permission for that model
+
+** AI always responds the same way
+
+This is normal for Candyland - there's only one valid action (ROLL).
+More complex games (Uno, Fiasco) will show more varied AI behavior.
+
+** Game is too fast
+
+Increase delay between AI turns:
+
+#+begin_src elisp
+;; In agent-game-config.el:
+(setq agent-game-ai-turn-delay 2.0)  ; 2 seconds between turns
+#+end_src
+
+** Want to see AI thinking
+
+AI prompts are not shown by default. To debug, check the code in:
+=core/agent-game-agent.el= → =agent-game-agent-ai-turn=
+
+The prompt sent to the AI is built by =agent-game-agent-candyland-prompt=.
+
+* Cost Estimates
+
+** OpenRouter Pricing (as of 2025)
+
+- Claude 3.5 Sonnet: ~$3 per 1M input tokens, $15 per 1M output
+- GPT-4o: ~$5 per 1M input tokens, $15 per 1M output
+- GPT-4o-mini: ~$0.15 per 1M input tokens, $0.60 per 1M output
+
+Candyland game:
+- ~200 tokens per turn (prompt)
+- ~10 tokens per response (just "ROLL")
+- Average game: 20-30 turns
+
+Cost per game:
+- Claude Sonnet: ~$0.002 (less than a penny)
+- GPT-4o: ~$0.003
+- GPT-4o-mini: ~$0.0001
+
+** OpenAI Direct
+
+Similar pricing to OpenRouter, but may require monthly subscription.
+
+** Ollama
+
+Free! Runs locally. But slower and less capable than cloud models.
+
+* Advanced Configuration
+
+** Custom Prompts
+
+Create custom prompt function for specific agent behavior:
+
+#+begin_src elisp
+(defun my-aggressive-candyland-prompt (agent-id)
+  "Make agent more aggressive (not really possible in Candyland, but demo)."
+  (format "You are a VERY COMPETITIVE player. Your goal is to WIN AT ALL COSTS.
+You are playing as %s. There is only one action: ROLL.
+Respond with: ROLL" agent-id))
+
+;; Register agent with custom prompt
+(agent-game-agent-register
+ 'aggressive-claude 'ai
+ "openrouter" "anthropic/claude-3.5-sonnet"
+ #'my-aggressive-candyland-prompt)
+#+end_src
+
+** Multiple Providers in One Game
+
+#+begin_src elisp
+;; Mix local and cloud models
+(agent-game-agent-register 'claude 'ai "openrouter" "anthropic/claude-3.5-sonnet")
+(agent-game-agent-register 'granite 'ai "ollama" "granite3-dense:8b")
+(agent-game-agent-register 'gpt 'ai "openai" "gpt-4o-mini")
+
+(candyland-start '(claude granite gpt))
+#+end_src
+
+** Verbose Logging
+
+#+begin_src elisp
+;; In agent-game-config.el:
+(setq agent-game-verbose t)
+#+end_src
+
+This will log more details about AI calls and responses.
+
+* Next Steps
+
+1. *Test with Candyland* - Make sure AI agents work
+2. *Try different models* - Compare Claude vs GPT vs Gemini
+3. *Wait for Uno* - More interesting AI behavior with choices
+4. *Wait for Fiasco* - See AI creativity in collaborative storytelling
+
+* FAQ
+
+** Can I use Anthropic's API directly?
+
+Not yet - the provider system currently only supports OpenAI-compatible APIs.
+Use OpenRouter to access Claude models.
+
+** Can I use local models besides Ollama?
+
+Yes! Any OpenAI-compatible local API will work. Set:
+- =agent-game-openai-base-url= to your local endpoint
+- =agent-game-openai-api-key= to whatever your API expects
+
+** How do I add a new provider?
+
+See =core/agent-game-provider.el=. Implement a call function and register it:
+
+#+begin_src elisp
+(defun my-provider-call (model prompt)
+  "Call my custom API."
+  ;; Your HTTP request code here
+  ;; Return response text
+  )
+
+(agent-game-provider-register "myprovider" #'my-provider-call
+                               '("model1" "model2"))
+#+end_src
+
+** Is my API key secure?
+
+=agent-game-config.el= is in =.gitignore=, so it won't be committed to git.
+However, it's stored as plain text on disk. Don't share the file.
+
+* Getting Help
+
+- Check =*Messages*= buffer for errors
+- Check audit log with =a= key
+- Read the code in =core/agent-game-agent.el=
+- File an issue on GitHub
+
+Happy agent gaming! 🎮🤖

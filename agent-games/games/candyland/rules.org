@@ -1,0 +1,36 @@
+#+TITLE: Candyland Rules (Simplified)
+#+DATE: 2025-11-06
+
+* Game Overview
+Candyland is a simple race-to-the-finish board game with no choices - just dice rolls and rule following.
+
+* Setup
+- 2-4 players
+- Each player starts at position 0
+- Board has 30 spaces
+- First to reach position 30 wins
+
+* Colors
+The die has 6 colors:
+- Red
+- Blue
+- Yellow
+- Green
+- Purple
+- Orange
+
+* Turn Structure
+On your turn:
+1. Roll the color die
+2. Move to the next space of that color
+3. Pass turn to next player
+
+* Winning
+- First player to reach or pass position 30 wins immediately
+- Game ends when a winner is declared
+
+* Notes
+- This is a simplified version for agent validation
+- No special spaces or shortcuts (yet)
+- Pure turn-based, no interaction between players
+- Deterministic rules - no judgment calls

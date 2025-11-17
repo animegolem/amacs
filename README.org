@@ -1,1 +1,100 @@
-Agentic Emacs
+#+TITLE: Agentic Macros (amacs)
+
+* Overview
+
+*Agentic Emacs* (amacs) is a multi-agent AI framework built on Emacs, designed to validate agent architectures through progressively complex games before applying them to real-world tasks like coding assistance.
+
+The core insight: Instead of building a coding assistant and testing it on subjective "helpfulness," we validate the architecture through games with well-defined rules and measurable success criteria.
+
+* What's Inside
+
+** Agent Games Framework
+
+The =agent-games/= directory contains a complete multi-agent game system:
+
+- *Game Progression:* Candyland (deterministic) → Uno (event-driven) → Fiasco (collaborative storytelling)
+- *Validation Goals:* Memory isolation, turn coordination, rule following, collaborative behavior
+- *Target Application:* Multi-agent coding assistant
+
+** Current Status
+
+✓ *Phase 1 Complete:* Candyland MVP
+- Core framework (state management, arbiter, renderer, audit logging)
+- ASCII board game interface
+- Agent memory isolation
+- Turn-based coordination
+- Full audit trail
+
+* Quick Start
+
+#+begin_src elisp
+;; Add to your Emacs config:
+(add-to-list 'load-path "/path/to/amacs/agent-games")
+(require 'agent-games)
+
+;; Start playing Candyland:
+M-x candyland-start RET human agent-1 RET
+
+;; In the game buffer:
+;; r - Roll die
+;; p - Pass turn
+;; a - View audit log
+;; ? - Help
+#+end_src
+
+* Why Games?
+
+Games provide ideal test cases for multi-agent systems:
+
+1. *Binary success* - Game completed or didn't
+2. *Observable* - Every action logged
+3. *Reproducible* - Can replay exact game state
+4. *Gradual complexity* - Candyland → Uno → Fiasco
+5. *Fun* - Enjoyable to test and develop
+
+If agents can play Fiasco well (complex judgment, memory, relationships), they can help you code.
+
+* Documentation
+
+- See =agent-games/README.org= for full framework documentation
+- See =agent-games/games/candyland/rules.org= for Candyland rules
+- See the PRD (Product Requirements Document) for complete vision
+
+* Architecture Highlights
+
+** Core Components
+
+- *Shared Game State:* Single source of truth, atomic updates
+- *Turn Arbiter:* Prevents race conditions, enforces fair play
+- *Agent Memory:* Isolated per-agent filesystem namespaces
+- *Audit Trail:* JSONL logs of every action for debugging
+
+** Directory Structure
+
+#+begin_example
+agent-games/
+├── agent-games.el          # Main entry point
+├── core/                   # Framework (state, arbiter, render, audit, memory)
+├── games/
+│   └── candyland/          # First game implementation
+│       ├── candyland.el
+│       ├── rules.org
+│       └── skills/         # Agent-accessible APIs
+└── audit/                  # Game logs (created at runtime)
+#+end_example
+
+* Roadmap
+
+- [X] Phase 1: Candyland (Week 1) - Basic validation ✓
+- [ ] Phase 1.5: AI Agent Integration - Connect Claude/GPT/Gemini
+- [ ] Phase 2: Uno (Week 2-3) - Event-driven + partial information
+- [ ] Phase 3: Fiasco (Week 4) - Complex judgment + long memory
+- [ ] Phase 4: Coding Assistant - Apply validated architecture
+
+* Contributing
+
+This is currently a research project exploring multi-agent architectures. The focus is on validating that agents can coordinate, maintain memory, and follow complex rules before applying these capabilities to coding assistance.
+
+* License
+
+Copyright (C) 2025
