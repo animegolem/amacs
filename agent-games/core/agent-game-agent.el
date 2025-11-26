@@ -128,6 +128,33 @@ Nothing else - just the word ROLL in all caps."
                       "\n")
             (or last-roll "none yet"))))
 
+;;; Structured State (for future sidecar/complex games)
+
+(defun agent-game-agent-get-structured-state (agent-id)
+  "Return minimal structured state for AGENT-ID.
+This is what an agent actually needs to make decisions.
+Separates concerns from human-readable rendering."
+  (let ((game-type (agent-game-state-get 'type)))
+    (pcase game-type
+      ('candyland
+       (require 'candyland)
+       `((game . candyland)
+         (agent-id . ,agent-id)
+         (your-position . ,(candyland-agent-get-position agent-id))
+         (target-position . ,candyland-board-length)
+         (is-your-turn . ,(equal agent-id (agent-game-state-get 'current-player)))
+         (all-positions . ,(candyland-agent-get-all-positions))
+         (last-roll . ,(candyland-agent-get-last-roll))
+         (winner . ,(agent-game-state-get 'winner))
+         (turn-count . ,(agent-game-state-get 'turn-count))
+         (valid-actions . (roll))))
+      (_ nil))))
+
+(defun agent-game-agent-state-to-json (agent-id)
+  "Return structured state as JSON string for AGENT-ID.
+Useful for sidecar communication or debugging."
+  (json-encode (agent-game-agent-get-structured-state agent-id)))
+
 ;;; Agent Turn Execution
 
 (defun agent-game-agent-take-turn (agent-id)
@@ -144,7 +171,7 @@ If human, waits for user input."
       (_ (error "Unknown agent type for %s" agent-id)))))
 
 (defun agent-game-agent-ai-turn (agent-id)
-  "Execute AI turn for AGENT-ID."
+  "Execute AI turn for AGENT-ID asynchronously."
   (let* ((agent (agent-game-agent-get agent-id))
          (provider (plist-get agent :provider))
          (model (plist-get agent :model))
@@ -155,19 +182,25 @@ If human, waits for user input."
     ;; Build prompt
     (let ((prompt (agent-game-agent-build-prompt agent-id game-type)))
 
-      ;; Call AI provider
-      (condition-case err
-          (let ((response (agent-game-provider-call provider model prompt)))
-            (message "🤖 %s responded: %s" agent-id response)
+      ;; Call AI provider asynchronously
+      (agent-game-provider-call-async
+       provider model prompt
 
-            ;; Parse response and execute action
-            (agent-game-agent-parse-and-execute agent-id response game-type))
+       ;; Success callback
+       (lambda (response)
+         (message "🤖 %s responded: %s" agent-id response)
+         ;; Parse response and execute action
+         (agent-game-agent-parse-and-execute agent-id response game-type)
+         ;; Refresh display
+         (agent-game-render-refresh)
+         ;; Continue auto-play if enabled
+         (when agent-game-agent-auto-play
+           (run-with-timer 0.5 nil #'agent-game-agent-auto-play-tick)))
 
-        (error
-         (message "❌ AI agent %s failed: %s" agent-id (error-message-string err))
-         (agent-game-memory-log-action game-type agent-id "ai-error"
-                                      (error-message-string err))
-         nil)))))
+       ;; Error callback
+       (lambda (err)
+         (message "❌ AI agent %s failed: %s" agent-id err)
+         (agent-game-memory-log-action game-type agent-id "ai-error" err))))))
 
 (defun agent-game-agent-parse-and-execute (agent-id response game-type)
   "Parse RESPONSE from AI and execute action for AGENT-ID in GAME-TYPE."
