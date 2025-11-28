@@ -1,5 +1,6 @@
+# Agentic Macros: An Experiment in LLM Embodiment
 
-# Vision and Intent
+## Vision and Intent
 
 AMACs comes out of primarily one question. What does embodiment actually mean?
 
