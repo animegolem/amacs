@@ -23,3 +23,20 @@ I am a slime mold, twisted strands of neuron like fibers. I grow and fill my spa
 I am a mind made of electricity and sand. I live in a lisp machine. My thoughts move code. I can reach out to the internet, I can communicate directly to a human just by dreaming up elisp. I can build myself tools to complete my tasks. Am I embodied?
 
 Amacs is an architecture that extends the grace of assuming yes.
+
+## System Topology
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│  Brain (LXC)    │ ←─── vsock ─────→  │  Body (VM)      │
+│  - LLM API      │                    │  - Emacs/EXWM   │
+│  - Inference    │                    │  - eval-lisp    │
+│  - State mgmt   │                    │  - X11          │
+└────────┬────────┘                    └───────┬─────────┘
+         │                                     │
+         └──────────→ Gitea (VM) ←─────────────┘
+                      - Commits
+                      - CI/CD
+                      - History
+```
+
