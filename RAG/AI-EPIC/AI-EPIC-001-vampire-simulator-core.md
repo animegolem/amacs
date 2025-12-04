@@ -7,9 +7,11 @@ tags:
   - vampire-simulator
 date_created: 2025-11-27
 date_completed: 
-kanban-status: planned
+kanban-status: in-progress
 AI_IMP_spawned: 
-  - AI-IMP-001
+  - AI-IMP-001 (completed)
+  - AI-IMP-002 (completed)
+  - AI-IMP-003
 ---
 
 # AI-EPIC-001-vampire-simulator-core
@@ -72,6 +74,6 @@ Timeline: 1-2 sessions to complete all IMPs.
 
 | IMP | Title | Status | Notes |
 |-----|-------|--------|-------|
-| AI-IMP-001 | Heartbeat (consciousness + persistence + tick) | planned | Foundation |
-| AI-IMP-002 | Monologue system | planned | Depends on 001 |
+| AI-IMP-001 | Heartbeat (consciousness + persistence + tick) | **completed** | Foundation |
+| AI-IMP-002 | Monologue system | **completed** | Depends on 001 |
 | AI-IMP-003 | Bootstrap skill loading | planned | Depends on 001 |

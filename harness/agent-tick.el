@@ -14,6 +14,7 @@
 ;;; Code:
 
 (require 'agent-consciousness)
+(require 'agent-monologue)
 
 ;;; Variables
 
@@ -94,8 +95,9 @@ This is the heartbeat - call manually during Phase 1.
 Cycle:
 1. Increment tick counter and timestamps
 2. Check for long gaps
-3. Persist consciousness to disk
-4. Commit to git
+3. Append to monologue
+4. Persist consciousness to disk
+5. Commit to git
 
 Returns the new tick number."
   (interactive)
@@ -106,6 +108,9 @@ Returns the new tick number."
         
         ;; Record this as an action
         (agent-record-action "tick" 0.8)
+        
+        ;; Append to monologue (placeholder content for now)
+        (agent-monologue-tick-hook)
         
         ;; Persist consciousness
         (agent-persist-consciousness)

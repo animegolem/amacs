@@ -20,6 +20,7 @@
 ;;; Code:
 
 (require 'agent-consciousness)
+(require 'agent-monologue)
 (require 'agent-tick)
 
 ;;; Variables
@@ -133,8 +134,8 @@ Preserves git history but reinitializes consciousness."
       (princ (format "Open Threads: %d\n" (length (agent-open-threads))))
       (princ "\n")
       (princ (format "Last Commit: %s\n" (or (agent-get :last-commit) "none")))
-      (princ (format "Recent Monologue: %d entries\n" 
-                     (length (agent-get :recent-monologue))))
+      (princ (format "Monologue Window: %d entries\n" (agent-monologue-count)))
+      (princ (format "Last Monologue: %s\n" (or (agent-monologue-head) "none")))
       (princ (format "Active Skills: %d\n" (length (agent-active-skills))))
       (princ "\n")
       (let ((budget (agent-get :budget)))

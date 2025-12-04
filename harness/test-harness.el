@@ -20,6 +20,7 @@
 (add-to-list 'load-path (file-name-directory load-file-name))
 
 (require 'agent-core)
+(require 'agent-monologue)
 
 ;;; Test Helpers
 
@@ -169,6 +170,49 @@
             (agent-get :long-gap-detected)
             (format ":long-gap-detected = %s" (agent-get :long-gap-detected))))
 
+(defun test-monologue-append ()
+  "Test: Monologue append creates file and updates window."
+  (message "\n--- Test: Monologue Append ---")
+  
+  ;; Check file was created
+  (test-log "monologue-file-exists"
+            (file-exists-p "~/.agent/monologue.org")
+            "monologue.org file")
+  
+  ;; Check content in file
+  (let* ((content (with-temp-buffer
+                    (insert-file-contents "~/.agent/monologue.org")
+                    (buffer-string))))
+    (test-log "monologue-has-entries"
+              (string-match-p "TICK" content)
+              "file contains TICK entries"))
+  
+  ;; Check rolling window
+  (let ((window (agent-get :recent-monologue)))
+    (test-log "monologue-window-populated"
+              (> (length window) 0)
+              (format "window has %d entries" (length window)))))
+
+(defun test-monologue-window-size ()
+  "Test: Rolling window doesn't exceed configured size."
+  (message "\n--- Test: Monologue Window Size ---")
+  
+  ;; Current window size after previous tests
+  (let ((window-size (length (agent-get :recent-monologue))))
+    (test-log "window-size-bounded"
+              (<= window-size agent-monologue-window-size)
+              (format "window %d <= max %d" window-size agent-monologue-window-size))))
+
+(defun test-commit-includes-monologue ()
+  "Test: Git commits include monologue content."
+  (message "\n--- Test: Commit Includes Monologue ---")
+  
+  (let* ((default-directory (expand-file-name "~/.agent/"))
+         (log (shell-command-to-string "git log --oneline -1")))
+    (test-log "commit-has-tick-content"
+              (string-match-p "Tick.*completed" log)
+              (format "last commit: %s" (string-trim log)))))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -177,13 +221,16 @@
   (setq test-results '())
   
   (message "\n========================================")
-  (message "AMACS Harness Tests (IMP-001)")
+  (message "AMACS Harness Tests (IMP-001 + IMP-002)")
   (message "========================================\n")
   
   (condition-case err
       (progn
         (test-cold-start)
         (test-tick-cycle)
+        (test-monologue-append)
+        (test-monologue-window-size)
+        (test-commit-includes-monologue)
         (test-warm-start)
         (test-long-gap)
         (test-summary))

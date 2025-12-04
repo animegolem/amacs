@@ -83,6 +83,7 @@ Called automatically at end of each tick."
     (unless (file-directory-p dir)
       (make-directory dir t)))
   (with-temp-file (expand-file-name agent-consciousness-file)
+    (insert ";;; -*- lexical-binding: t; -*-\n")
     (insert ";;; Agent consciousness - auto-generated, do not edit\n")
     (insert (format ";;; Saved at: %s\n\n" (format-time-string "%Y-%m-%d %H:%M:%S")))
     (insert "(setq agent-consciousness\n      '")

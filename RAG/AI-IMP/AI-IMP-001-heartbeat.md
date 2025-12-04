@@ -6,11 +6,11 @@ tags:
   - phase-1
   - consciousness
   - persistence
-kanban_status: planned
+kanban_status: completed
 depends_on: []
-confidence_score: 0.85
+confidence_score: 0.95
 created_date: 2025-11-27
-close_date: 
+close_date: 2025-11-27
 --- 
 
 # AI-IMP-001-heartbeat
@@ -55,9 +55,10 @@ Tick cycle (minimal version):
 ### Files to Touch
 
 ```
-~/.emacs.d/amacs/agent-core.el       # New file - main entry point
-~/.emacs.d/amacs/agent-consciousness.el  # New file - consciousness management
-~/.emacs.d/amacs/agent-tick.el       # New file - tick cycle
+amacs/harness/agent-core.el          # Main entry point
+amacs/harness/agent-consciousness.el # Consciousness management
+amacs/harness/agent-tick.el          # Tick cycle
+amacs/harness/test-harness.el        # Manual test suite
 ~/.agent/                            # Directory created on init
 ~/.agent/.gitignore                  # Ignore scratch files
 ```
@@ -68,33 +69,33 @@ Tick cycle (minimal version):
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Create `~/.emacs.d/amacs/` directory structure
-- [ ] Implement `agent-consciousness.el`:
-  - [ ] Define `agent-consciousness` variable with full schema (identity, tick, time, mood, confidence, threads, etc.)
-  - [ ] Implement `agent-init-consciousness` for cold start
-  - [ ] Implement `agent-persist-consciousness` (write to disk)
-  - [ ] Implement `agent-load-consciousness` (read from disk)
-  - [ ] Implement `agent-get` / `agent-set` accessors
-- [ ] Implement `agent-tick.el`:
-  - [ ] Implement `agent-increment-tick` (bump counter + timestamps)
-  - [ ] Implement `agent-check-gap` (detect >1hr gaps)
-  - [ ] Implement `agent-commit` (git add -A + commit with message)
-  - [ ] Implement `agent-tick` interactive command (the full cycle)
-- [ ] Implement `agent-core.el`:
-  - [ ] Implement `agent-ensure-directories` (create ~/.agent if missing)
-  - [ ] Implement `agent-init` (cold start or warm start based on file existence)
-  - [ ] Add autoload for `agent-tick`
-  - [ ] Provide `agent-core` feature
-- [ ] Create `~/.agent/.gitignore` with sensible defaults
-- [ ] Initialize git repo in `~/.agent/` 
-- [ ] Test: cold start creates consciousness, tick 0 commits
-- [ ] Test: 10 ticks produce 10 commits with incrementing tick numbers
-- [ ] Test: kill Emacs, restart, warm start resumes from tick 10
-- [ ] Test: verify `:long-gap-detected` triggers after simulated gap
+- [x] Create `amacs/harness/` directory structure
+- [x] Implement `agent-consciousness.el`:
+  - [x] Define `agent-consciousness` variable with full schema (identity, tick, time, mood, confidence, threads, etc.)
+  - [x] Implement `agent-init-consciousness` for cold start
+  - [x] Implement `agent-persist-consciousness` (write to disk)
+  - [x] Implement `agent-load-consciousness` (read from disk)
+  - [x] Implement `agent-get` / `agent-set` accessors
+- [x] Implement `agent-tick.el`:
+  - [x] Implement `agent-increment-tick` (bump counter + timestamps)
+  - [x] Implement `agent-check-gap` (detect >1hr gaps)
+  - [x] Implement `agent-git-commit` (git add -A + commit with message)
+  - [x] Implement `agent-tick` interactive command (the full cycle)
+- [x] Implement `agent-core.el`:
+  - [x] Implement `agent--ensure-directories` (create ~/.agent if missing)
+  - [x] Implement `agent-init` (cold start or warm start based on file existence)
+  - [x] Add autoload for `agent-tick`
+  - [x] Provide `agent-core` feature
+- [x] Create `~/.agent/.gitignore` with sensible defaults
+- [x] Initialize git repo in `~/.agent/` 
+- [x] Test: cold start creates consciousness, tick 0 commits
+- [x] Test: 10 ticks produce 10 commits with incrementing tick numbers
+- [x] Test: kill Emacs, restart, warm start resumes from tick 10
+- [x] Test: verify `:long-gap-detected` triggers after simulated gap
  
 ### Acceptance Criteria
 
-**Scenario:** Fresh install, first run
+**Scenario:** Fresh install, first run ✓
 **GIVEN** `~/.agent/` does not exist
 **WHEN** User loads agent-core and calls `(agent-init)`
 **THEN** `~/.agent/` directory is created
@@ -102,7 +103,7 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 **AND** Git repo is initialized
 **AND** Initial commit is made
 
-**Scenario:** Normal tick cycle
+**Scenario:** Normal tick cycle ✓
 **GIVEN** Agent is initialized at tick 5
 **WHEN** User calls `M-x agent-tick`
 **THEN** `:current-tick` becomes 6
@@ -110,18 +111,31 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 **AND** Consciousness is persisted to disk
 **AND** Git commit is made with message containing "TICK 6"
 
-**Scenario:** Warm start after restart
+**Scenario:** Warm start after restart ✓
 **GIVEN** Agent ran to tick 10, Emacs was killed
 **WHEN** User starts Emacs and calls `(agent-init)`
 **THEN** Consciousness loads from disk
 **AND** `:current-tick` is 10
 **AND** Next `agent-tick` produces tick 11
 
-**Scenario:** Long gap detection
+**Scenario:** Long gap detection ✓
 **GIVEN** Agent last ran 2 hours ago (`:last-inference-time` is old)
 **WHEN** User calls `agent-tick`
 **THEN** `:long-gap-detected` is set to `t`
 
 ### Issues Encountered 
 
-<!-- Fill during implementation -->
+1. **File location deviation:** Originally planned `~/.emacs.d/amacs/` but implemented in `amacs/harness/` within repo. This is cleaner - source lives in repo, installed via load-path. No functional impact.
+
+2. **Lexical binding warning:** Generated `consciousness.el` initially lacked `;;; -*- lexical-binding: t; -*-` cookie. Fixed by adding to `agent-persist-consciousness` output.
+
+3. **Git log error handling:** Initial implementation used shell redirect syntax in `call-process` which doesn't work. Fixed by adding `agent--has-commits-p` helper with proper error handling.
+
+### Artifacts Produced
+
+| File | Purpose |
+|------|---------|
+| `harness/agent-consciousness.el` | Consciousness variable + persistence (~180 lines) |
+| `harness/agent-tick.el` | Tick cycle + git commits (~120 lines) |
+| `harness/agent-core.el` | Initialization + entry point (~130 lines) |
+| `harness/test-harness.el` | Manual test suite (~150 lines) |

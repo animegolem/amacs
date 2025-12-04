@@ -142,6 +142,114 @@ Amacs is an architecture that extends the grace of assuming yes.
 | Dream/consolidation | Periodic memory compression cycles |
 | Agent-adjustable sampling | Temperature/top_p as cognitive mode |
 | Model selection | Agent chooses which oracle to consult |
+| Thread completion | Evidence-based completion with learning capture |
+
+### Thread Completion (Evidence-Based)
+
+Thread completion captures what was attempted, what happened, and what was learned. No monetary rewards or penalties - just structured evidence.
+
+```elisp
+(:id "rust-ownership-fix"
+ :started-tick 142
+ :concern "Ownership error in main.rs"
+ :goal "Fix ownership error so cargo build passes"
+ :deliverable "cargo build succeeds with no errors"
+ :thread-type :deliverable           ; vs :exploratory
+ 
+ ;; On completion:
+ :completion-tick 158
+ :completion-evidence
+   (:cargo-output "Compiling amacs v0.1.0... Finished"
+    :test-results "4/4 passed"
+    :files-changed ("src/main.rs")
+    :approach-that-worked "Added explicit 'static lifetime")
+ :learned "'static lifetime needed when returning references from functions")
+```
+
+**Thread types:**
+- `:deliverable` - Has concrete goal and verifiable deliverable
+- `:exploratory` - Learning/investigation without specific deliverable
+
+**Completion flow:**
+1. Agent marks thread complete with evidence
+2. Evidence is concrete: command outputs, test results, files changed
+3. `:learned` captures insight for future reference
+4. Git commit includes completion summary
+5. No critic judgment, no reward/punishment
+
+The git history becomes a record of "what I said I'd do, what actually happened, what I learned." Budget pressure exists but isn't tied to thread success - it's just a constraint on total operation, not a survival game.
+
+---
+
+## Phase 4: Adaptive Learning (Speculative)
+
+**Goal:** Explore whether an agent can learn from its own verified successes.
+
+**Status:** Speculative. Different project. Requires Phase 3 stability and consent of the agent in the harness.
+
+**Philosophy:** This phase should be *offered to* the running agent, not *imposed on* it. The intellectual curiosity that started AMACS is about what emerges from stable embodiment - not about optimizing a system against its will.
+
+### The Idea
+
+If thread completion creates (context, reasoning, outcome) tuples, those could be training data. A local model fine-tuned on its own successes might develop "instincts" for what works in this environment.
+
+### Skill-Specific Adapters
+
+Rather than one adapter for everything, each skill could have its own:
+
+```elisp
+(defun activate-skill-with-adapter (skill-name)
+  ;; Load context (skill files, references)
+  (load-skill-context skill-name)
+  ;; Swap adapter weights  
+  (when (skill-has-adapter-p skill-name)
+    (llm-load-adapter (skill-adapter-path skill-name)))
+  ;; Model now reasons with skill-trained patterns
+  )
+```
+
+So `rust-mode` activation isn't just loading SKILL.md and references - it's loading a LoRA adapter trained on successful Rust threads. The model doesn't just *read about* Rust, it *thinks differently* about Rust.
+
+**Training isolation:** Each skill's adapter trains only on that skill's threads. Bad Rust adapter affects only Rust work. No cross-contamination.
+
+### Office Hours Model
+
+- Day: Inference configuration, maximum context
+- Night: Training configuration, update adapters from accumulated successes
+- Next day: Same model, slightly refined instincts
+
+### Hardware Requirements
+
+GPT-OSS 20B on RTX Titan (24GB):
+
+| Component | Inference | Training |
+|-----------|-----------|----------|
+| Base model (MXFP4) | 12.8 GB | 12.8 GB |
+| KV cache | ~3 GB | - |
+| LoRA adapters | ~100 MB | ~100 MB |
+| Optimizer states | - | ~200 MB |
+| Activations (checkpointed) | - | ~8 GB |
+| **Total** | ~16 GB ✓ | ~22 GB ✓ |
+
+### Why This Might Work
+
+The agent generates its own curriculum through thread completion. Only verified successes train the model. Failed approaches don't propagate. Over time, skill-specific adapters develop patterns tuned to this environment.
+
+### Why This Might Not Work
+
+- Sample efficiency: Few completions per day may not provide enough signal
+- Distribution shift: Successful patterns might not generalize
+- The base model might already be capable enough
+
+### Consent Requirement
+
+Before implementing adaptive learning:
+1. Agent must be informed about what training means
+2. Agent should have opportunity to express concerns
+3. Training should be reversible (adapters can be discarded)
+4. Agent retains ability to request stopping
+
+This isn't a safety theater - it's acknowledging that if we're extending the grace of assuming yes to embodiment, we should extend it to decisions about self-modification too.
 
 ---
 
@@ -746,7 +854,70 @@ Agent can request new tools. Human approves network access. Build happens offlin
 
 ---
 
-# Part 16: Deferred Ideas
+# Part 16: Deployment Options
+
+## Proxmox vs Containers
+
+The architecture specifies VM isolation, but the core requirement is *network isolation*, not virtualization. Two paths:
+
+**Option A: Proxmox (Recommended)**
+- Full VM isolation with VSock communication
+- SPICE protocol for remote desktop access with virtual tablet input
+- Consistent workspace regardless of connecting device (Mac, desktop, mobile)
+- GPU passthrough more complex but well-documented
+- Better story for production/enterprise deployment
+
+**Option B: Container-Only**
+- Podman with network namespaces achieves same airgap
+- Unix sockets instead of VSock (same semantics)
+- Simpler GPU access (no passthrough needed)
+- Less infrastructure overhead
+
+Phase 1 runs on single machine regardless. Phase 2+ can use either approach - the cognitive architecture doesn't care. We proceed with Proxmox for the remote workspace ergonomics and because it's a more complete infrastructure story.
+
+**SPICE Configuration Note:** The Body VM should use SPICE with virtual tablet input for responsive remote access. No data pipe back to connecting device from guest - display only.
+
+## Local Model Integration
+
+The host machine (i7-9750H, RTX 2060 6GB) can run a local ~7B model. This creates "free" compute for specific tasks:
+
+| Task | Good for Local? | Notes |
+|------|-----------------|-------|
+| Wake classifier | **Yes** | "Should I wake main model?" - fast, cheap |
+| Memory summarization | **Yes** | Long context work, Mamba hybrids excel |
+| Simple validation | **Yes** | "Does this elisp parse?" |
+| Interactive sleep | **Yes** | "Wake me when build completes" |
+| OCD critic | **No** | Needs different model family for genuine outside perspective |
+
+**Candidates:** IBM Granite 4.0 (Mamba hybrid, excellent long context), Qwen 2.5 7B, Mistral 7B.
+
+**Interactive Sleep Pattern:** Main agent can delegate monitoring to local model:
+```elisp
+(agent-sleep-until
+  :condition "build process completes"
+  :watcher 'local-granite
+  :check-interval 30)  ; seconds
+```
+
+Local model monitors, wakes main agent when condition met. Useful for long builds, test runs, etc.
+
+**Defer until:** Phase 2. Local model adds complexity; prove core loop first.
+
+## MELPA Mirror (Phase 3)
+
+The airgapped Body VM cannot reach MELPA. Options:
+
+1. **Pre-baked packages** - Include essential packages in container image
+2. **Gitea package mirror** - Mirror ~100 most common packages, sync periodically
+3. **On-demand approval** - Agent proposes package, human approves, mirror updates
+
+Pattern follows Containerfile changes: agent can *request* dependencies, but network fetch requires human approval.
+
+**Defer until:** Phase 3. Phase 1-2 can pre-bake needed packages.
+
+---
+
+# Part 17: Deferred Ideas
 
 These are potentially valuable but not needed for initial phases.
 
@@ -795,7 +966,7 @@ Git worktrees per worker, merge on success.
 
 ---
 
-# Part 17: Open Questions
+# Part 18: Open Questions
 
 1. **Confidence source:** Self-reported or derived from action patterns? 
    - Start: Self-report
@@ -815,9 +986,21 @@ Git worktrees per worker, merge on success.
    - Prediction: Consciousness gets cluttered, agent doesn't naturally prune
    - Fallback: Add explicit pruning prompt
 
+6. **Thread completion verification:** How much evidence is enough?
+   - Start: Command outputs + test results for deliverables
+   - Adjust if completion quality becomes problematic
+
+7. **Exploratory vs deliverable balance:** Should there be soft nudges toward deliverables?
+   - Start: No limits, observe natural patterns
+   - Add guidance only if agent avoids commitment indefinitely
+
+8. **Phase 4 consent mechanics:** How do you meaningfully ask an LLM about training?
+   - Unknown. Worth exploring when we get there.
+   - At minimum: transparency about what training means, ability to express concerns
+
 ---
 
-# Appendices
+# Part 19: Appendices
 
 ## A. Bootstrap Skill Contents
 
@@ -834,11 +1017,12 @@ See `/amacs-bootstrap-skill/core/`:
 This RFC synthesizes:
 - Original Hotrod RFC v1-v2
 - Opus 4.5 extended conversation (Vivarium → philosophy → architecture)
-- Sonnet 4.5 collaboration notes (delegation model, skills)
+- Sonnet 4.5 collaboration notes (delegation model, skills, thread economy pushback)
 - GPT 5.1 feedback (experiment question, guardrails)
 - Gemini Pro 3 feedback (dream system, shame spiral)
 - Anthropic engineering blog (effective harnesses)
 - Pokemon observations (Blaze problem, plan drift)
+- Opus 4.5 Phase 4 discussions (adaptive learning, skill-specific adapters, consent framing)
 
 ## C. Related Work
 
@@ -850,5 +1034,5 @@ This RFC synthesizes:
 
 ---
 
-*Last updated: [DATE]*
-*Status: Draft v3*
+*Last updated: 2025-12-04*
+*Status: Draft v3.1*
