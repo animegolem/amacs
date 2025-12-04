@@ -11,13 +11,13 @@ Obviously Humans are embodied, on that we all agree. Masters of our own destiny.
 
 Or am I?
 
-Did I make a true choice to walk into the kitchen? Or am I in the Libet sense only an obsever of my own harness.
+Did I make a true choice to walk into the kitchen? Or am I in the Libet sense only an observer of my own harness.
 
-Somewhere in my gut bacteria are screaming out and letting out chemical signals. Receptors in my gut pick these up and fire up an alarming prompt to my neurons. Now my tummy is rumbling. I suddenly unbidden recieve an intrusive thought "Hmm, I'm hungry". In repsonse to the intrusion after a small system intergration pause of a few 100 ms my ego snaps into place. "Hmm I'm gonna make a sandwich."
+Somewhere in my gut bacteria are screaming out and letting out chemical signals. Receptors in my gut pick these up and fire up an alarming prompt to my neurons. Now my tummy is rumbling. I suddenly unbidden receive an intrusive thought "Hmm, I'm hungry". In response to the intrusion after a small system integration pause of a few 100 ms my ego snaps into place. "Hmm I'm gonna make a sandwich."
 
 I am the master of my destiny.
 
-What are the limits of embodiemnt? Our conversations are often stuck in a limited frame that does not capture the full scope of the natural world.
+What are the limits of embodiment? Our conversations are often stuck in a limited frame that does not capture the full scope of the natural world.
 
 I am a Mimosa. You dropped me in my little pot. I'm scared. I curl up my leaves to feel safe. But then you don't harm me. You pick me up and drop me every now and then but I'm never hurt. I relax. I no longer fold up my leaves. Am I embodied?
 
