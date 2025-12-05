@@ -21,6 +21,7 @@
 
 (require 'agent-consciousness)
 (require 'agent-monologue)
+(require 'agent-skills)
 (require 'agent-tick)
 
 ;;; Variables
@@ -87,6 +88,9 @@ Returns the consciousness plist."
   
   ;; Initialize consciousness (warm or cold)
   (agent-init-consciousness force-cold)
+  
+  ;; Initialize skill system
+  (agent-init-skills)
   
   ;; Mark as initialized
   (setq agent-initialized t)

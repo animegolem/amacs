@@ -349,33 +349,55 @@ Each tick follows: **perceive → infer → act → commit**
 
 Every tick ends with a git commit. The commit message is the agent's monologue line. Git history is autobiographical memory.
 
-## Context Assembly
+## Context Assembly (Thread-Centric)
+
+Context is built from active thread + global buffers. See [[AI-ADR-001-thread-centric-context]].
 
 ```elisp
-(defun build-context (perception)
-  `(:system ,(agent-system-prompt)       ; Cached indefinitely
-    :consciousness ,agent-consciousness   ; Cached ~5min
-    :relevant-skills ,(load-relevant-skills)
-    :watched-buffers ,(perception-buffers perception)
-    :checkpoint ,(maybe-inject-checkpoint)
-    :intrusive-thoughts ,(maybe-inject-critic)
-    :trigger ,(describe-changes perception)))
+(defun build-context ()
+  "Build context from active thread + global buffers."
+  (let* ((active (agent-get-active-thread))
+         (pending (agent-get-pending-threads))
+         (global-bufs (agent-get :global-buffers)))
+    `(:system ,(agent-system-prompt)       ; Cached indefinitely
+      :consciousness ,(agent-consciousness-summary)  ; Cached ~5min
+      
+      ;; Active thread - fully hydrated
+      :active-thread
+        (:id ,(plist-get active :id)
+         :concern ,(plist-get active :concern)
+         :approach ,(plist-get active :approach)
+         :buffers ,(hydrate-buffers (plist-get active :buffers))
+         :skills ,(load-thread-skills active))
+      
+      ;; Pending threads - dehydrated (metadata only)
+      :pending-threads
+        ,(mapcar #'thread-summary pending)
+      
+      ;; Global buffers (chat interface)
+      :global ,(hydrate-buffers global-bufs)
+      
+      ;; Fresh each tick
+      :checkpoint ,(maybe-inject-checkpoint)
+      :intrusive-thoughts ,(maybe-inject-critic)
+      :trigger ,(describe-current-trigger))))
 ```
 
 ### Token Budget
 
-| Component | Tokens | Cache Duration |
-|-----------|--------|----------------|
-| System prompt | 2k | Indefinite |
-| Consciousness | 8k | ~5 minutes |
-| Watched buffers | 40k | Until modified |
-| Mode skills | 5k | Per mode switch |
-| Recent history | 10k | Rolling window |
-| Error context | 2k | Fresh on errors |
+| Component | Tokens | Notes |
+|-----------|--------|-------|
+| System prompt | 2k | Cached indefinitely |
+| Consciousness summary | 4k | Cached ~5min |
+| Active thread buffers | 30k | Only active thread's buffers |
+| Active thread skills | 5k | Skills bound to this thread |
+| Pending thread summaries | 2k | Metadata only, not content |
+| Global buffers | 5k | `*agent-chat*` etc |
+| Checkpoint/intrusive | 2k | Fresh each relevant tick |
 | Trigger | 1k | Always fresh |
-| **Reserved** | 12k | Headroom |
+| **Reserved** | 29k | Headroom |
 
-**Target:** ~80k tokens. Most ticks only trigger burns fresh tokens.
+**Target:** ~80k tokens. Thread switching changes what's hydrated, not total budget.
 
 ## Wake Logic
 
@@ -428,7 +450,7 @@ The `agent-consciousness` plist is working memory. It persists across ticks and 
        (:tick 140 :action "retry-same" :confidence 0.45))
     
     ;; Context
-    :watching-buffers ("src/main.rs" "*agent-chat*")
+    :global-buffers ("*agent-chat*")     ; Always-active (human interface)
     :recent-monologue ("..." "..." ...)
     :active-skills (...)
     
@@ -439,17 +461,43 @@ The `agent-consciousness` plist is working memory. It persists across ticks and 
     :budget (:cost-so-far 2.47 :budget-limit 5.00 :pressure :moderate)))
 ```
 
-## Thread Structure
+## Thread Structure (Thread-Centric Context)
+
+Threads own their context. Buffer watching is per-thread, not global.
 
 ```elisp
 (:id "rust-debugging"
  :started-tick 142
  :priority 1
  :concern "Ownership error in main.rs"
+ 
+ ;; Context ownership (NEW)
  :buffers ("src/main.rs" "Cargo.toml")
+ :primary-mode 'rust-mode
+ :skill-tags ("rust-mode" "project-amacs")
+ :hydrated t                          ; Full content in context when active
+ 
+ ;; Work state
  :approach "Trying lifetime annotations"
- :blocking t)
+ :blocking t
+ 
+ ;; Future (Phase 4)
+ :active-loras nil)
 ```
+
+**Hydration states:**
+- **Active thread**: `:hydrated t` - full buffer contents in context
+- **Pending threads**: `:hydrated nil` - metadata only (concern, approach)
+
+**Global buffers:**
+```elisp
+;; In consciousness (not per-thread)
+:global-buffers ("*agent-chat*")  ; Always active regardless of thread
+```
+
+`*agent-chat*` stays globally active - it's the human interface, relevant regardless of focus. Other buffers belong to threads.
+
+See: [[AI-ADR-001-thread-centric-context]]
 
 Threads provide:
 - Organization (what am I working on?)
@@ -1035,4 +1083,15 @@ This RFC synthesizes:
 ---
 
 *Last updated: 2025-12-04*
-*Status: Draft v3.1*
+*Status: Draft v3.2*
+
+---
+
+# Audit Trail
+
+| Date | RFC Section(s) | Change Summary | Related ADR |
+|------|----------------|----------------|-------------|
+| 2025-12-04 | Part 5, Part 6 | Thread-centric context: threads own buffers, global-buffers for chat, hydration states | [[AI-ADR-001]] |
+| 2025-12-04 | Part 3 (Phase 3, Phase 4) | Added evidence-based thread completion, speculative Phase 4 with consent framing | - |
+| 2025-12-04 | Part 16 | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror | - |
+| 2025-11-27 | Initial | RFC v3 created from synthesis of prior documents | - |

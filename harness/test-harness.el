@@ -21,6 +21,7 @@
 
 (require 'agent-core)
 (require 'agent-monologue)
+(require 'agent-skills)
 
 ;;; Test Helpers
 
@@ -213,6 +214,67 @@
               (string-match-p "Tick.*completed" log)
               (format "last commit: %s" (string-trim log)))))
 
+(defun test-skill-system-init ()
+  "Test: Skill system initializes with core skill."
+  (message "\n--- Test: Skill System Init ---")
+  
+  ;; Check skills directory exists
+  (test-log "skills-dir-exists"
+            (file-directory-p "~/.agent/skills/")
+            "skills directory")
+  
+  ;; Check core skill was installed
+  (test-log "core-skill-exists"
+            (file-exists-p "~/.agent/skills/core/SKILL.md")
+            "core/SKILL.md")
+  
+  ;; Check core skill references exist
+  (test-log "core-skill-references"
+            (file-exists-p "~/.agent/skills/core/references/consciousness-schema.md")
+            "core/references/consciousness-schema.md"))
+
+(defun test-skill-loading ()
+  "Test: Core skill can be loaded."
+  (message "\n--- Test: Skill Loading ---")
+  
+  ;; Load core skill
+  (let ((content (agent-load-skill "core")))
+    (test-log "skill-loads"
+              (and content (> (length content) 0))
+              (format "loaded %d chars" (length (or content ""))))
+    
+    ;; Check content looks right
+    (test-log "skill-content-valid"
+              (and content (string-match-p "AMACS" content))
+              "content contains AMACS")))
+
+(defun test-skill-tracking ()
+  "Test: Skills are tracked in :active-skills."
+  (message "\n--- Test: Skill Tracking ---")
+  
+  (let ((active (agent-get :active-skills)))
+    (test-log "active-skills-present"
+              (> (length active) 0)
+              (format "%d skills tracked" (length active)))
+    
+    ;; Check core skill is tracked
+    (let ((core-entry (assoc "core" active)))
+      (test-log "core-skill-tracked"
+                core-entry
+                (if core-entry 
+                    (format "use-count: %d" 
+                            (plist-get (cdr core-entry) :use-count))
+                  "not found")))))
+
+(defun test-relevant-skills ()
+  "Test: Relevant skills include core."
+  (message "\n--- Test: Relevant Skills ---")
+  
+  (let ((relevant (agent-get-relevant-skills)))
+    (test-log "relevant-includes-core"
+              (member "core" relevant)
+              (format "relevant: %s" relevant))))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -220,17 +282,21 @@
   (interactive)
   (setq test-results '())
   
-  (message "\n========================================")
-  (message "AMACS Harness Tests (IMP-001 + IMP-002)")
-  (message "========================================\n")
+  (message "\n============================================")
+  (message "AMACS Harness Tests (IMP-001 + IMP-002 + IMP-003)")
+  (message "============================================\n")
   
   (condition-case err
       (progn
         (test-cold-start)
+        (test-skill-system-init)
+        (test-skill-loading)
         (test-tick-cycle)
         (test-monologue-append)
         (test-monologue-window-size)
         (test-commit-includes-monologue)
+        (test-skill-tracking)
+        (test-relevant-skills)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
