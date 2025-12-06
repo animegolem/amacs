@@ -6,7 +6,7 @@ tags:
   - phase-1
   - threads
   - context
-kanban_status: planned
+kanban_status: in-progress
 depends_on: 
   - AI-IMP-001
   - AI-IMP-002
@@ -74,30 +74,30 @@ test-harness.el                 # Thread context tests
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Update `agent-consciousness.el`:
-  - [ ] Replace `:watching-buffers` with `:global-buffers` in default schema
-  - [ ] Add `:global-buffers` to default consciousness (`("*agent-chat*")`)
-  - [ ] Update thread schema with `:hydrated`, `:primary-mode`, `:skill-tags`
-- [ ] Implement `agent-threads.el`:
-  - [ ] Implement `agent-create-thread` (concern, optional buffers → full thread)
-  - [ ] Implement `agent-get-active-thread` 
-  - [ ] Implement `agent-get-pending-threads`
-  - [ ] Implement `agent-switch-thread` (dehydrate old, hydrate new)
-  - [ ] Implement `agent-complete-thread` (mark completed with evidence)
-  - [ ] Implement `thread-summary` (metadata-only representation)
-  - [ ] Implement `infer-skill-tags` (from buffers + mode)
-  - [ ] Provide `agent-threads` feature
-- [ ] Implement `agent-context.el`:
-  - [ ] Implement `hydrate-buffers` (list of buffer names → content plist)
-  - [ ] Implement `build-thread-context` (active + pending + global)
-  - [ ] Implement `agent-consciousness-summary` (trimmed for context)
-  - [ ] Provide `agent-context` feature
-- [ ] Modify `agent-tick.el`:
-  - [ ] Use new `build-thread-context` in tick cycle
-  - [ ] Update wake logic to check active thread buffers + global
-- [ ] Modify `agent-core.el`:
-  - [ ] Initialize default thread on cold start if none exists
-  - [ ] Require new modules
+- [x] Update `agent-consciousness.el`:
+  - [x] Replace `:watching-buffers` with `:global-buffers` in default schema
+  - [x] Add `:global-buffers` to default consciousness (`("*agent-chat*")`)
+  - [x] Update thread schema with `:hydrated`, `:primary-mode`, `:skill-tags`
+- [x] Implement `agent-threads.el`:
+  - [x] Implement `agent-create-thread` (concern, optional buffers → full thread)
+  - [x] Implement `agent-get-active-thread` 
+  - [x] Implement `agent-get-pending-threads`
+  - [x] Implement `agent-switch-thread` (dehydrate old, hydrate new)
+  - [x] Implement `agent-complete-thread` (mark completed with evidence)
+  - [x] Implement `thread-summary` (metadata-only representation)
+  - [x] Implement `infer-skill-tags` (from buffers + mode)
+  - [x] Provide `agent-threads` feature
+- [x] Implement `agent-context.el`:
+  - [x] Implement `hydrate-buffers` (list of buffer names → content plist)
+  - [x] Implement `build-thread-context` (active + pending + global)
+  - [x] Implement `agent-consciousness-summary` (trimmed for context)
+  - [x] Provide `agent-context` feature
+- [x] Modify `agent-tick.el`:
+  - [x] Use new `build-thread-context` in tick cycle
+  - [x] Update wake logic to check active thread buffers + global
+- [x] Modify `agent-core.el`:
+  - [x] Initialize default thread on cold start if none exists
+  - [x] Require new modules
 - [ ] Test: create thread captures current buffer
 - [ ] Test: switch thread changes which buffers would be hydrated
 - [ ] Test: `*agent-chat*` always in context regardless of thread

@@ -22,6 +22,8 @@
 (require 'agent-core)
 (require 'agent-monologue)
 (require 'agent-skills)
+(require 'agent-threads)
+(require 'agent-context)
 
 ;;; Test Helpers
 
@@ -275,6 +277,114 @@
               (member "core" relevant)
               (format "relevant: %s" relevant))))
 
+;;; IMP-004 Tests: Thread-Centric Context
+
+(defun test-default-thread-created ()
+  "Test: Cold start creates a default thread."
+  (message "\n--- Test: Default Thread Created ---")
+  
+  ;; Check active thread exists
+  (test-log "has-active-thread"
+            (agent-get :active-thread)
+            (format "active: %s" (agent-get :active-thread)))
+  
+  ;; Check open threads has at least one
+  (test-log "has-open-threads"
+            (> (length (agent-get :open-threads)) 0)
+            (format "%d open threads" (length (agent-get :open-threads)))))
+
+(defun test-thread-creation ()
+  "Test: Creating a thread captures buffer and mode."
+  (message "\n--- Test: Thread Creation ---")
+  
+  ;; Create a test buffer
+  (with-temp-buffer
+    (setq-local major-mode 'emacs-lisp-mode)
+    (rename-buffer "test-file.el" t)
+    
+    ;; Create thread from this buffer
+    (let ((thread (agent-create-thread "Test concern" '("test-file.el"))))
+      (test-log "thread-has-id"
+                (plist-get thread :id)
+                (format "id: %s" (plist-get thread :id)))
+      
+      (test-log "thread-has-buffers"
+                (member "test-file.el" (plist-get thread :buffers))
+                (format "buffers: %s" (plist-get thread :buffers)))
+      
+      (test-log "thread-has-mode"
+                (plist-get thread :primary-mode)
+                (format "mode: %s" (plist-get thread :primary-mode)))
+      
+      (test-log "thread-not-hydrated"
+                (not (plist-get thread :hydrated))
+                "new threads start dehydrated"))))
+
+(defun test-thread-switching ()
+  "Test: Switching threads changes hydration state."
+  (message "\n--- Test: Thread Switching ---")
+  
+  ;; Create and add a new thread
+  (let* ((thread (agent-create-thread "Switch test" '("*scratch*")))
+         (thread-id (plist-get thread :id)))
+    (agent-add-thread thread)
+    
+    ;; Remember old active
+    (let ((old-active (agent-get :active-thread)))
+      ;; Switch to new thread
+      (agent-switch-thread thread-id)
+      
+      (test-log "active-thread-changed"
+                (equal (agent-get :active-thread) thread-id)
+                (format "active is now: %s" (agent-get :active-thread)))
+      
+      ;; Check new thread is hydrated
+      (let ((switched-thread (agent-get-thread thread-id)))
+        (test-log "new-thread-hydrated"
+                  (plist-get switched-thread :hydrated)
+                  "switched thread is hydrated"))
+      
+      ;; Switch back
+      (when old-active
+        (agent-switch-thread old-active)))))
+
+(defun test-global-buffers ()
+  "Test: Global buffers are in watched list."
+  (message "\n--- Test: Global Buffers ---")
+  
+  ;; Check *agent-chat* is in global buffers
+  (let ((global (agent-get :global-buffers)))
+    (test-log "agent-chat-global"
+              (member "*agent-chat*" global)
+              (format "global-buffers: %s" global)))
+  
+  ;; Check watched buffers includes global
+  (let ((watched (agent-get-watched-buffer-names)))
+    (test-log "watched-includes-global"
+              (member "*agent-chat*" watched)
+              (format "watched: %s" watched))))
+
+(defun test-context-assembly ()
+  "Test: Context assembly produces expected structure."
+  (message "\n--- Test: Context Assembly ---")
+  
+  (let ((ctx (agent-build-context)))
+    (test-log "context-has-consciousness"
+              (plist-get ctx :consciousness)
+              "has :consciousness")
+    
+    (test-log "context-has-active-thread"
+              (plist-get ctx :active-thread)
+              "has :active-thread")
+    
+    (test-log "context-has-pending-threads"
+              (listp (plist-get ctx :pending-threads))
+              "has :pending-threads list")
+    
+    (test-log "context-has-global-buffers"
+              (listp (plist-get ctx :global-buffers))
+              "has :global-buffers list")))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -282,21 +392,26 @@
   (interactive)
   (setq test-results '())
   
-  (message "\n============================================")
-  (message "AMACS Harness Tests (IMP-001 + IMP-002 + IMP-003)")
-  (message "============================================\n")
+  (message "\n================================================")
+  (message "AMACS Harness Tests (IMP-001 + IMP-002 + IMP-003 + IMP-004)")
+  (message "================================================\n")
   
   (condition-case err
       (progn
         (test-cold-start)
         (test-skill-system-init)
         (test-skill-loading)
+        (test-default-thread-created)
+        (test-thread-creation)
         (test-tick-cycle)
         (test-monologue-append)
         (test-monologue-window-size)
         (test-commit-includes-monologue)
         (test-skill-tracking)
         (test-relevant-skills)
+        (test-thread-switching)
+        (test-global-buffers)
+        (test-context-assembly)
         (test-warm-start)
         (test-long-gap)
         (test-summary))

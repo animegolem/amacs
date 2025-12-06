@@ -54,8 +54,8 @@ and continuity. See `agent-init-consciousness' for full schema.")
     ;; Action history
     :last-actions ()
     
-    ;; Context
-    :watching-buffers ()
+    ;; Context (thread-centric: buffers owned by threads, not global)
+    :global-buffers ("*agent-chat*")  ; Always-active buffers (human interface)
     :focus nil
     
     ;; Memory pointers

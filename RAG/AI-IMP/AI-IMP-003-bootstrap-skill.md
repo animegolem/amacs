@@ -6,12 +6,12 @@ tags:
   - phase-1
   - skills
   - bootstrap
-kanban_status: in-progress
+kanban_status: completed
 depends_on: 
   - AI-IMP-001
 confidence_score: 0.85
 created_date: 2025-12-04
-close_date: 
+close_date: 2025-12-06
 --- 
 
 # AI-IMP-003-bootstrap-skill
@@ -92,10 +92,10 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
   - [x] Create `~/.agent/skills/core/` directory
   - [x] Copy SKILL.md and references/
   - [x] Scripts go into harness (not ~/.agent)
-- [ ] Test: init creates skills directory
-- [ ] Test: core skill loads and returns content
-- [ ] Test: `agent-get-relevant-skills` works for rust-mode buffer
-- [ ] Test: `:active-skills` tracks skill loading
+- [x] Test: init creates skills directory
+- [x] Test: core skill loads and returns content
+- [x] Test: `agent-get-relevant-skills` works for rust-mode buffer
+- [x] Test: `:active-skills` tracks skill loading
  
 ### Acceptance Criteria
 

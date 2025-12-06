@@ -22,6 +22,8 @@
 (require 'agent-consciousness)
 (require 'agent-monologue)
 (require 'agent-skills)
+(require 'agent-threads)
+(require 'agent-context)
 (require 'agent-tick)
 
 ;;; Variables
@@ -36,10 +38,9 @@
 
 (defun agent--has-commits-p ()
   "Return t if the git repo has at least one commit."
-  (condition-case nil
-      (let ((result (agent--git-run "rev-parse" "HEAD")))
-        (not (string-empty-p result)))
-    (error nil)))
+  (let ((default-directory (expand-file-name agent-base-directory)))
+    ;; Check return code directly - rev-parse HEAD fails (non-zero) if no commits
+    (= 0 (call-process "git" nil nil nil "rev-parse" "HEAD"))))
 
 ;;; Directory Setup
 
@@ -91,6 +92,9 @@ Returns the consciousness plist."
   
   ;; Initialize skill system
   (agent-init-skills)
+  
+  ;; Ensure at least one thread exists (cold start)
+  (agent-ensure-default-thread)
   
   ;; Mark as initialized
   (setq agent-initialized t)

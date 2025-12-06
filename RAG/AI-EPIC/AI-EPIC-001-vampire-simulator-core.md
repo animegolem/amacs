@@ -77,5 +77,5 @@ Timeline: 1-2 sessions to complete all IMPs.
 |-----|-------|--------|-------|
 | AI-IMP-001 | Heartbeat (consciousness + persistence + tick) | **completed** | Foundation |
 | AI-IMP-002 | Monologue system | **completed** | Depends on 001 |
-| AI-IMP-003 | Bootstrap skill loading | planned | Depends on 001 |
+| AI-IMP-003 | Bootstrap skill loading | **completed** | Depends on 001 |
 | AI-IMP-004 | Thread-centric context | planned | Depends on 001, 002. See ADR-001 |
