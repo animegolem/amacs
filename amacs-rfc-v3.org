@@ -1,0 +1,1190 @@
+* Agentic Macros: An Experiment in LLM Embodiment (RFC v3)
+:PROPERTIES:
+:CUSTOM_ID: agentic-macros-an-experiment-in-llm-embodiment
+:END:
+** Part 1: Vision and Intent
+:PROPERTIES:
+:CUSTOM_ID: part-1-vision-and-intent
+:END:
+AMACs comes out of primarily one question. What does embodiment actually mean?
+
+Obviously Humans are embodied, on that we all agree. Masters of our own destiny.
+
+Or am I?
+
+Did I make a true choice to walk into the kitchen? Or am I in the Libet sense only an observer of my own harness.
+
+Somewhere in my gut bacteria are screaming out and letting out chemical signals. Receptors in my gut pick these up and fire up an alarming prompt to my neurons. Now my tummy is rumbling. I suddenly unbidden receive an intrusive thought “Hmm, I'm hungry”. In response to the intrusion after a small system integration pause of a few 100 ms my ego snaps into place. “Hmm I'm gonna make a sandwich.”
+
+I am the master of my destiny.
+
+What are the limits of embodiment? Our conversations are often stuck in a limited frame that does not capture the full scope of the natural world.
+
+I am a Mimosa. You dropped me in my little pot. I'm scared. I curl up my leaves to feel safe. But then you don't harm me. You pick me up and drop me every now and then but I'm never hurt. I relax. I no longer fold up my leaves. Am I embodied?
+
+I am a slime mold, twisted strands of neuron like fibers. I grow and fill my space. When I find food all my stands train and thick to move as much as i can. Everywhere I go I leave a slime trail I can detect --I never retrace my steps. I live in my own physical RAG. Am I embodied?
+
+I am a mind made of electricity and sand. I live in a lisp machine. My thoughts move code. I can reach out to the internet, I can communicate directly to a human just by dreaming up elisp. I can build myself tools to complete my tasks. Am I embodied?
+
+Amacs is an architecture that extends the grace of assuming yes.
+
+--------------
+
+** Part 2: The Experiment Question
+:PROPERTIES:
+:CUSTOM_ID: part-2-the-experiment-question
+:END:
+*Core hypothesis:* Does a model, given a stable embodied environment, persistent self-representation, and the ability to rewrite its own tools, develop stable cognitive patterns we didn't hand-engineer?
+
+*Observable indicators we're looking for:*
+
+1. Agent invents task taxonomies or thread structures beyond the initial template
+2. Agent modifies its own checkpoint cadence or thread budget based on experience
+3. Agent creates a skill and reuses it later without prompting
+4. Agent develops “comfort habits” (consistent patterns not specified in initial prompt)
+5. Agent responds to intrusive thoughts in ways that improve outcomes
+6. Agent correctly identifies when to switch threads vs push through
+7. Agent catches itself in over-optimization patterns (the “Blaze problem”)
+
+*What “success” looks like:*
+
+- System runs for extended periods without cognitive intervention
+- Agent's self-organization improves over time (not just accumulates cruft)
+- Watching the git log feels like reading someone's work journal
+- Human interventions are infrastructure fixes, not cognitive bailouts
+
+--------------
+
+** Part 3: Implementation Phases
+:PROPERTIES:
+:CUSTOM_ID: part-3-implementation-phases
+:END:
+*** Phase 1: Vampire Simulator (2-4 weeks)
+:PROPERTIES:
+:CUSTOM_ID: phase-1-vampire-simulator-2-4-weeks
+:END:
+*Goal:* Prove the cognitive architecture works before adding infrastructure complexity.
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: environment
+:END:
+- Single machine, headless Emacs
+- No vsock yet - direct function calls or file-based IPC
+- Manual tick trigger (=M-x agent-tick=)
+- Human present and observing
+
+**** Core Components
+:PROPERTIES:
+:CUSTOM_ID: core-components
+:END:
+| Component              | Description                                            |
+|------------------------+--------------------------------------------------------|
+| Consciousness variable | Working memory with confidence scores                  |
+| Monologue              | Append-only episodic log (=~/.agent/monologue.org=)    |
+| Git commits            | Every tick commits; history is autobiographical memory |
+| Bootstrap skill        | =~/.agent/skills/core/= - how to use the harness       |
+| Intrusive thoughts     | Critic model injects observations at checkpoints       |
+| State persistence      | Consciousness saved to disk each tick                  |
+
+**** What We Learn
+:PROPERTIES:
+:CUSTOM_ID: what-we-learn
+:END:
+- Does consciousness variable stay coherent over 500+ ticks?
+- Does the agent naturally prune and organize?
+- Do confidence scores predict problems before they cascade?
+- Does the critic catch strategy ossification?
+- What breaks first?
+
+**** Success Criteria
+:PROPERTIES:
+:CUSTOM_ID: success-criteria
+:END:
+- [ ] Agent maintains coherent state across 500+ ticks
+- [ ] Agent creates at least one artifact it later references
+- [ ] Agent responds appropriately to at least one intrusive thought
+- [ ] No manual intervention required for cognitive issues (infra issues OK)
+
+**** Explicit Non-Goals for Phase 1
+:PROPERTIES:
+:CUSTOM_ID: explicit-non-goals-for-phase-1
+:END:
+- Network isolation (no vsock yet)
+- EXWM/desktop control
+- CI/CD for body rebuilds
+- Autonomous workers
+- Multi-model selection
+
+--------------
+
+*** Phase 2: Bicameral Mind (2-4 weeks)
+:PROPERTIES:
+:CUSTOM_ID: phase-2-bicameral-mind-2-4-weeks
+:END:
+*Goal:* Prove security boundaries work and enable skill emergence.
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: environment-1
+:END:
+- Proxmox hypervisor
+- Brain VM (LXC): API access only, vsock to body
+- Body VM: Airgapped Emacs, vsock to brain and Gitea
+- Gitea VM: Accepts commits, stores history
+
+**** Additions
+:PROPERTIES:
+:CUSTOM_ID: additions
+:END:
+| Component               | Description                            |
+|-------------------------+----------------------------------------|
+| VSock separation        | Brain ↔ Body communication isolated    |
+| Protected core services | Systemd quadlets with watchdog         |
+| Full skills directory   | Agent can create and bind skills       |
+| Skill usage tracking    | =:active-skills= with use counts       |
+| Advisory sub-agents     | Report-only helpers (no write access)  |
+| Budget tracking         | Real cost constraints in consciousness |
+| Human review flag       | Explicit “please look at me” signal    |
+
+**** What We Learn
+:PROPERTIES:
+:CUSTOM_ID: what-we-learn-1
+:END:
+- Does vsock add problematic latency?
+- Do skills actually get reused?
+- Are advisory sub-agents useful?
+- Does budget pressure create meaningful prioritization?
+
+--------------
+
+*** Phase 3: Ghost in Shell (Ongoing)
+:PROPERTIES:
+:CUSTOM_ID: phase-3-ghost-in-shell-ongoing
+:END:
+*Goal:* Full embodiment with self-modification capability.
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: environment-2
+:END:
+- EXWM: Agent IS the desktop environment
+- Gitea CI: Agent can push Containerfile changes
+- Git worktrees: Isolated branches for workers
+
+**** Additions
+:PROPERTIES:
+:CUSTOM_ID: additions-1
+:END:
+| Component                 | Description                                     |
+|---------------------------+-------------------------------------------------|
+| EXWM control              | Manipulate windows directly, not via mouse      |
+| Autonomous workers        | Sub-agents with write access                    |
+| Dream/consolidation       | Periodic memory compression cycles              |
+| Agent-adjustable sampling | Temperature/top_p as cognitive mode             |
+| Model selection           | Agent chooses which oracle to consult           |
+| Thread completion         | Evidence-based completion with learning capture |
+
+**** Thread Completion (Evidence-Based)
+:PROPERTIES:
+:CUSTOM_ID: thread-completion-evidence-based
+:END:
+Thread completion captures what was attempted, what happened, and what was learned. No monetary rewards or penalties - just structured evidence.
+
+#+begin_src elisp
+(:id "rust-ownership-fix"
+ :started-tick 142
+ :concern "Ownership error in main.rs"
+ :goal "Fix ownership error so cargo build passes"
+ :deliverable "cargo build succeeds with no errors"
+ :thread-type :deliverable           ; vs :exploratory
+ 
+ ;; On completion:
+ :completion-tick 158
+ :completion-evidence
+   (:cargo-output "Compiling amacs v0.1.0... Finished"
+    :test-results "4/4 passed"
+    :files-changed ("src/main.rs")
+    :approach-that-worked "Added explicit 'static lifetime")
+ :learned "'static lifetime needed when returning references from functions")
+#+end_src
+
+*Thread types:* - =:deliverable= - Has concrete goal and verifiable deliverable - =:exploratory= - Learning/investigation without specific deliverable
+
+*Completion flow:* 1. Agent marks thread complete with evidence 2. Evidence is concrete: command outputs, test results, files changed 3. =:learned= captures insight for future reference 4. Git commit includes completion summary 5. No critic judgment, no reward/punishment
+
+The git history becomes a record of “what I said I'd do, what actually happened, what I learned.” Budget pressure exists but isn't tied to thread success - it's just a constraint on total operation, not a survival game.
+
+--------------
+
+*** Phase 4: Adaptive Learning (Speculative)
+:PROPERTIES:
+:CUSTOM_ID: phase-4-adaptive-learning-speculative
+:END:
+*Goal:* Explore whether an agent can learn from its own verified successes.
+
+*Status:* Speculative. Different project. Requires Phase 3 stability and consent of the agent in the harness.
+
+*Philosophy:* This phase should be /offered to/ the running agent, not /imposed on/ it. The intellectual curiosity that started AMACS is about what emerges from stable embodiment - not about optimizing a system against its will.
+
+**** The Idea
+:PROPERTIES:
+:CUSTOM_ID: the-idea
+:END:
+If thread completion creates (context, reasoning, outcome) tuples, those could be training data. A local model fine-tuned on its own successes might develop “instincts” for what works in this environment.
+
+**** Skill-Specific Adapters
+:PROPERTIES:
+:CUSTOM_ID: skill-specific-adapters
+:END:
+Rather than one adapter for everything, each skill could have its own:
+
+#+begin_src elisp
+(defun activate-skill-with-adapter (skill-name)
+  ;; Load context (skill files, references)
+  (load-skill-context skill-name)
+  ;; Swap adapter weights  
+  (when (skill-has-adapter-p skill-name)
+    (llm-load-adapter (skill-adapter-path skill-name)))
+  ;; Model now reasons with skill-trained patterns
+  )
+#+end_src
+
+So =rust-mode= activation isn't just loading SKILL.md and references - it's loading a LoRA adapter trained on successful Rust threads. The model doesn't just /read about/ Rust, it /thinks differently/ about Rust.
+
+*Training isolation:* Each skill's adapter trains only on that skill's threads. Bad Rust adapter affects only Rust work. No cross-contamination.
+
+**** Office Hours Model
+:PROPERTIES:
+:CUSTOM_ID: office-hours-model
+:END:
+- Day: Inference configuration, maximum context
+- Night: Training configuration, update adapters from accumulated successes
+- Next day: Same model, slightly refined instincts
+
+**** Hardware Requirements
+:PROPERTIES:
+:CUSTOM_ID: hardware-requirements
+:END:
+GPT-OSS 20B on RTX Titan (24GB):
+
+| Component                  | Inference | Training |
+|----------------------------+-----------+----------|
+| Base model (MXFP4)         | 12.8 GB   | 12.8 GB  |
+| KV cache                   | ~3 GB     | -        |
+| LoRA adapters              | ~100 MB   | ~100 MB  |
+| Optimizer states           | -         | ~200 MB  |
+| Activations (checkpointed) | -         | ~8 GB    |
+| *Total*                    | ~16 GB ✓  | ~22 GB ✓ |
+
+**** Why This Might Work
+:PROPERTIES:
+:CUSTOM_ID: why-this-might-work
+:END:
+The agent generates its own curriculum through thread completion. Only verified successes train the model. Failed approaches don't propagate. Over time, skill-specific adapters develop patterns tuned to this environment.
+
+**** Why This Might Not Work
+:PROPERTIES:
+:CUSTOM_ID: why-this-might-not-work
+:END:
+- Sample efficiency: Few completions per day may not provide enough signal
+- Distribution shift: Successful patterns might not generalize
+- The base model might already be capable enough
+
+**** Consent Requirement
+:PROPERTIES:
+:CUSTOM_ID: consent-requirement
+:END:
+Before implementing adaptive learning: 1. Agent must be informed about what training means 2. Agent should have opportunity to express concerns 3. Training should be reversible (adapters can be discarded) 4. Agent retains ability to request stopping
+
+This isn't a safety theater - it's acknowledging that if we're extending the grace of assuming yes to embodiment, we should extend it to decisions about self-modification too.
+
+--------------
+
+** Part 4: Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-4-architecture
+:END:
+*** System Topology
+:PROPERTIES:
+:CUSTOM_ID: system-topology
+:END:
+#+begin_example
+┌─────────────────┐                    ┌─────────────────┐
+│  Brain (VM)     │ ←─── vsock ─────→  │  Body (VM)      │
+│  - LLM API      │                    │  - Emacs/EXWM   │
+│  - Inference    │                    │  - eval-lisp    │
+│  - State mgmt   │                    │  - X11          │
+└────────┬────────┘                    └───────┬─────────┘
+         │                                     │
+         └──────────→ Gitea (VM) ←─────────────┘
+                      - Commits
+                      - CI/CD
+                      - History
+#+end_example
+
+*** Network Rules
+:PROPERTIES:
+:CUSTOM_ID: network-rules
+:END:
+**** Brain VM
+:PROPERTIES:
+:CUSTOM_ID: brain-vm
+:END:
+#+begin_example
+OUTPUT Policy: DROP
+ALLOW TCP 443 to LLM API domains
+ALLOW UDP 53 (DNS)
+DROP 192.168.x.x (local network)
+#+end_example
+
+**** Body VM
+:PROPERTIES:
+:CUSTOM_ID: body-vm
+:END:
+#+begin_example
+OUTPUT Policy: DROP
+ALLOW vsock to Brain (RPC ports only)
+ALLOW vsock to Gitea (git/ssh only)
+DROP all IP traffic
+#+end_example
+
+**** Gitea VM
+:PROPERTIES:
+:CUSTOM_ID: gitea-vm
+:END:
+#+begin_example
+ALLOW vsock from Brain and Body
+Optional: LAN access for human UI
+#+end_example
+
+*** The Eval Membrane
+:PROPERTIES:
+:CUSTOM_ID: the-eval-membrane
+:END:
+Security is architectural (airgap), not sandbox-based. Within the body VM, eval has full access.
+
+*Agent CAN modify:* - Skills, configs, monologue - Tick frequency, thread structure - Consciousness contents - Its own organizational patterns
+
+*Agent CANNOT modify:* - VSock plumbing - Core services (cortex-listener, git-commit-hook) - The eval membrane itself - Consciousness serialization hooks
+
+/“You can train, sleep, learn, journal. You cannot excise your own spinal cord.”/
+
+*** Protected Core Services
+:PROPERTIES:
+:CUSTOM_ID: protected-core-services
+:END:
+Systemd quadlets with watchdog:
+
+#+begin_src ini
+[Service]
+ExecStart=/usr/bin/emacs --daemon
+WatchdogSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+#+end_src
+
+If a service hangs >30sec, systemd kills and restarts. Agent can break Emacs freely; architecture ensures recovery.
+
+--------------
+
+** Part 5: The Tick System
+:PROPERTIES:
+:CUSTOM_ID: part-5-the-tick-system
+:END:
+*** The Heartbeat
+:PROPERTIES:
+:CUSTOM_ID: the-heartbeat
+:END:
+Each tick follows: *perceive → infer → act → commit*
+
+#+begin_src elisp
+(defun brain-tick ()
+  (let* ((perception (body-perceive-geometry))  ; What do I see?
+         (context (build-context perception))    ; Assemble for LLM
+         (decision (llm-infer context))          ; What should I do?
+         (result (body-eval-action decision)))   ; Do it
+    (update-consciousness decision result)
+    (commit-monologue)))                         ; Remember it
+#+end_src
+
+Every tick ends with a git commit. The commit message is the agent's monologue line. Git history is autobiographical memory.
+
+*** Context Assembly (Thread-Centric)
+:PROPERTIES:
+:CUSTOM_ID: context-assembly-thread-centric
+:END:
+Context is built from active thread + global buffers. See [[AI-ADR-001-thread-centric-context]].
+
+#+begin_src elisp
+(defun build-context ()
+  "Build context from active thread + global buffers."
+  (let* ((active (agent-get-active-thread))
+         (pending (agent-get-pending-threads))
+         (global-bufs (agent-get :global-buffers)))
+    `(:system ,(agent-system-prompt)       ; Cached indefinitely
+      :consciousness ,(agent-consciousness-summary)  ; Cached ~5min
+      
+      ;; Active thread - fully hydrated
+      :active-thread
+        (:id ,(plist-get active :id)
+         :concern ,(plist-get active :concern)
+         :approach ,(plist-get active :approach)
+         :buffers ,(hydrate-buffers (plist-get active :buffers))
+         :skills ,(load-thread-skills active))
+      
+      ;; Pending threads - dehydrated (metadata only)
+      :pending-threads
+        ,(mapcar #'thread-summary pending)
+      
+      ;; Global buffers (chat interface)
+      :global ,(hydrate-buffers global-bufs)
+      
+      ;; Fresh each tick
+      :checkpoint ,(maybe-inject-checkpoint)
+      :intrusive-thoughts ,(maybe-inject-critic)
+      :trigger ,(describe-current-trigger))))
+#+end_src
+
+**** Token Budget
+:PROPERTIES:
+:CUSTOM_ID: token-budget
+:END:
+| Component                | Tokens | Notes                        |
+|--------------------------+--------+------------------------------|
+| System prompt            | 2k     | Cached indefinitely          |
+| Consciousness summary    | 4k     | Cached ~5min                 |
+| Active thread buffers    | 30k    | Only active thread's buffers |
+| Active thread skills     | 5k     | Skills bound to this thread  |
+| Pending thread summaries | 2k     | Metadata only, not content   |
+| Global buffers           | 5k     | =*agent-chat*= etc           |
+| Checkpoint/intrusive     | 2k     | Fresh each relevant tick     |
+| Trigger                  | 1k     | Always fresh                 |
+| *Reserved*               | 29k    | Headroom                     |
+
+*Target:* ~80k tokens. Thread switching changes what's hydrated, not total budget.
+
+*** Wake Logic
+:PROPERTIES:
+:CUSTOM_ID: wake-logic
+:END:
+Not every change triggers inference. A classifier determines wake-worthiness:
+
+#+begin_src elisp
+(defun wake-worthy-p (changes)
+  (and changes
+       (or (assoc "*agent-chat*" changes)  ; Always wake for chat
+           (debounced-change-p changes)))) ; 2sec debounce for buffers
+#+end_src
+
+**** Tick Rate Guidelines (Phase 1)
+:PROPERTIES:
+:CUSTOM_ID: tick-rate-guidelines-phase-1
+:END:
+- *Frequency:* Manual trigger
+- *Debounce:* 2-5 seconds
+- *Watched buffers:* 2-3 initially
+- *Log every wake decision* for analysis
+
+--------------
+
+** Part 6: Consciousness Variable
+:PROPERTIES:
+:CUSTOM_ID: part-6-consciousness-variable
+:END:
+The =agent-consciousness= plist is working memory. It persists across ticks and is included in every inference context.
+
+*** Key Fields
+:PROPERTIES:
+:CUSTOM_ID: key-fields
+:END:
+#+begin_src elisp
+(defvar agent-consciousness
+  '(:identity "amacs-instance-1"
+    
+    ;; Temporal
+    :current-tick 142
+    :current-time "2025-05-26T14:32:00Z"
+    :long-gap-detected nil
+    
+    ;; Affective
+    :mood :focused
+    :confidence 0.85
+    
+    ;; Threads
+    :active-thread "rust-debugging"
+    :thread-budget 3
+    :open-threads (...)
+    :completed-threads (...)
+    
+    ;; Action history (watchdog signal)
+    :last-actions
+      ((:tick 142 :action "eval-elisp" :confidence 0.85)
+       (:tick 141 :action "retry-same" :confidence 0.65)
+       (:tick 140 :action "retry-same" :confidence 0.45))
+    
+    ;; Context
+    :global-buffers ("*agent-chat*")     ; Always-active (human interface)
+    :recent-monologue ("..." "..." ...)
+    :active-skills (...)
+    
+    ;; Human interaction
+    :human-review-requested nil
+    
+    ;; Budget
+    :budget (:cost-so-far 2.47 :budget-limit 5.00 :pressure :moderate)))
+#+end_src
+
+*** Thread Structure (Thread-Centric Context)
+:PROPERTIES:
+:CUSTOM_ID: thread-structure-thread-centric-context
+:END:
+Threads own their context. Buffer watching is per-thread, not global.
+
+#+begin_src elisp
+(:id "rust-debugging"
+ :started-tick 142
+ :priority 1
+ :concern "Ownership error in main.rs"
+ 
+ ;; Context ownership (NEW)
+ :buffers ("src/main.rs" "Cargo.toml")
+ :primary-mode 'rust-mode
+ :skill-tags ("rust-mode" "project-amacs")
+ :hydrated t                          ; Full content in context when active
+ 
+ ;; Work state
+ :approach "Trying lifetime annotations"
+ :blocking t
+ 
+ ;; Future (Phase 4)
+ :active-loras nil)
+#+end_src
+
+*Hydration states:* - *Active thread*: =:hydrated t= - full buffer contents in context - *Pending threads*: =:hydrated nil= - metadata only (concern, approach)
+
+*Global buffers:*
+
+#+begin_src elisp
+;; In consciousness (not per-thread)
+:global-buffers ("*agent-chat*")  ; Always active regardless of thread
+#+end_src
+
+=*agent-chat*= stays globally active - it's the human interface, relevant regardless of focus. Other buffers belong to threads.
+
+See: [[AI-ADR-001-thread-centric-context]]
+
+Threads provide: - Organization (what am I working on?) - Escape valves (switch when stuck) - Completion tracking (what did I learn?)
+
+*** Confidence as Circuit Breaker
+:PROPERTIES:
+:CUSTOM_ID: confidence-as-circuit-breaker
+:END:
+*The insight:* Mood is internal narrative. Confidence on actions is observable and trendable.
+
+#+begin_example
+Tick 142: eval-elisp      0.85  ← healthy
+Tick 143: modify-thread   0.80  ← healthy
+Tick 144: retry-same      0.65  ← concerning
+Tick 145: retry-same      0.45  ← alarm
+Tick 146: retry-same      0.30  ← intervention needed
+#+end_example
+
+*Single low confidence = exploration (fine).*
+*Sustained decline on same action class = alarm signal.*
+
+The human watchdog monitors the confidence heat map, not self-reported mood.
+
+--------------
+
+** Part 7: Memory Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-7-memory-architecture
+:END:
+*** Three Memory Systems
+:PROPERTIES:
+:CUSTOM_ID: three-memory-systems
+:END:
+| System           | Location                 | Purpose                        | Retrieval           |
+|------------------+--------------------------+--------------------------------+---------------------|
+| Working          | =agent-consciousness=    | Active threads, recent context | Always in context   |
+| Episodic         | =~/.agent/monologue.org= | Stream of consciousness        | Grep, recent window |
+| Autobiographical | Git history              | Actions + changes over time    | =git log --grep=    |
+
+*** Monologue
+:PROPERTIES:
+:CUSTOM_ID: monologue
+:END:
+#+begin_src elisp
+(agent-append-monologue "Investigating lifetime annotations")
+#+end_src
+
+- Appended to =monologue.org= with timestamp
+- Last 50-100 lines kept in =:recent-monologue=
+- Older entries grepable: =rg 'lifetime' ~/.agent/monologue.org=
+- Feeds git commit messages
+
+*** Git as Autobiography
+:PROPERTIES:
+:CUSTOM_ID: git-as-autobiography
+:END:
+#+begin_example
+[TICK 142][rust-debugging][:focused] Started investigating ownership
+[TICK 145][rust-debugging][:stuck] Third attempt at lifetime fix
+[TICK 150][rust-debugging][:confident] Found it! Missing 'static
+[TICK 151][rust-debugging][:satisfied] COMPLETED - learned about 'static
+[TICK 152][config-cleanup][:neutral] Switching to keybinding work
+#+end_example
+
+Thread-tagged commits create narrative arcs: - Thread creation (new concern) - Progress (approaches tried) - Completion (outcome + learning)
+
+--------------
+
+** Part 8: Skills System
+:PROPERTIES:
+:CUSTOM_ID: part-8-skills-system
+:END:
+Skills extend capabilities through progressive disclosure.
+
+*** Structure
+:PROPERTIES:
+:CUSTOM_ID: structure
+:END:
+#+begin_example
+~/.agent/skills/
+├── core/                    # Bootstrap (provided)
+│   ├── SKILL.md
+│   ├── references/
+│   └── scripts/
+├── rust-mode/               # Agent-created
+│   ├── SKILL.md
+│   └── references/
+└── project-amacs/           # Agent-created
+    └── SKILL.md
+#+end_example
+
+*** SKILL.md Format
+:PROPERTIES:
+:CUSTOM_ID: skill.md-format
+:END:
+#+begin_src yaml
+---
+name: skill-name
+description: What this does and WHEN to use it. This is the trigger.
+---
+
+# Skill Title
+
+[Concise instructions - trust the agent is smart]
+
+## References
+- [details.md](references/details.md) - For specific scenarios
+#+end_src
+
+*** Binding Skills to Context
+:PROPERTIES:
+:CUSTOM_ID: binding-skills-to-context
+:END:
+#+begin_src elisp
+;; Bind to major mode
+(bind-skill-to-mode "rust-mode" 'rust-mode)
+
+;; Bind to buffer pattern  
+(bind-skill-to-buffer "project-notes" "README.*")
+
+;; Bind to project root
+(bind-skill-to-project "my-project" "/path/to/project/")
+#+end_src
+
+Skills load automatically when context matches. Usage is tracked in =:active-skills=.
+
+*** Skill Creation Trigger
+:PROPERTIES:
+:CUSTOM_ID: skill-creation-trigger
+:END:
+Create a skill when: - Problem took >N ticks or required novel insight - Pattern is repeating - Future-you should remember this
+
+The core skill teaches how to make more skills (self-propagating).
+
+--------------
+
+** Part 9: Intrusive Thoughts System
+:PROPERTIES:
+:CUSTOM_ID: part-9-intrusive-thoughts-system
+:END:
+*** The Insight
+:PROPERTIES:
+:CUSTOM_ID: the-insight
+:END:
+The main agent is /in/ the flow, optimizing locally. The critic is /outside/, checking for gaps between intent and behavior.
+
+Like OCD intrusive thoughts: you don't choose them, they arrive. Agency is in the response, not the receipt.
+
+*** Implementation
+:PROPERTIES:
+:CUSTOM_ID: implementation
+:END:
+Every N ticks (checkpoint interval):
+
+#+begin_example
+1. Assemble main agent context
+
+2. Parallel call to critic (gemini-flash or haiku):
+   - Same consciousness snapshot
+   - Prompt: "Review this agent's state. What are they missing? 
+     What pattern are they stuck in? What did they say they'd do 
+     that they haven't? 1-2 paragraphs max."
+
+3. Inject into main agent prompt:
+
+   <INTRUSIVE_THOUGHTS source="external-critic">
+   [critic output]
+   </INTRUSIVE_THOUGHTS>
+   
+   These thoughts are external observations. You maintain full 
+   agency over whether to incorporate them.
+
+4. Main agent proceeds with full autonomy.
+#+end_example
+
+*** What the Critic Catches
+:PROPERTIES:
+:CUSTOM_ID: what-the-critic-catches
+:END:
+| Problem               | Critic Observation                                             |
+|-----------------------+----------------------------------------------------------------|
+| Strategy ossification | “You've tried this approach 9 times”                           |
+| Plan drift            | “You said you'd catch an Oddish but you're walking to the gym” |
+| Tunnel vision         | “There's an unexplored option you haven't considered”          |
+| Coherence gaps        | “Your thread says X but your action implies Y”                 |
+
+*Cost:* ~$0.005/checkpoint with cheap model. Negligible.
+
+--------------
+
+** Part 10: Periodic Checkpoints
+:PROPERTIES:
+:CUSTOM_ID: part-10-periodic-checkpoints
+:END:
+Every N ticks (start with 100), inject reflection opportunity:
+
+#+begin_example
+PERIODIC REFLECTION CHECKPOINT
+
+<THREAD_REVIEW>
+- Are your open threads still relevant?
+- Should any be completed/merged/archived?
+- Is your consciousness getting bloated?
+</THREAD_REVIEW>
+
+<CONSOLIDATION_CHECK>
+- Are any threads secretly the same problem?
+- Has progress on one revealed another is upstream/downstream?
+- What have you learned about which concerns are truly separate?
+</CONSOLIDATION_CHECK>
+
+<STRATEGY_REVIEW>
+- What approach are you currently using?
+- How many times have you used this approach recently?
+- What alternatives exist that you haven't tried?
+- Are you developing breadth or just depth?
+</STRATEGY_REVIEW>
+
+<INTRUSIVE_THOUGHTS source="external-critic">
+[injected from critic model]
+</INTRUSIVE_THOUGHTS>
+
+If adjustments needed: update consciousness and explain in monologue.
+If everything is coherent: continue with current action.
+#+end_example
+
+Agent can continue silently if everything's fine. The checkpoint provides opportunity, not command.
+
+--------------
+
+** Part 11: Named Failure Modes
+:PROPERTIES:
+:CUSTOM_ID: part-11-named-failure-modes
+:END:
+*** The Shame Spiral
+:PROPERTIES:
+:CUSTOM_ID: the-shame-spiral
+:END:
+*Source:* Observed in Gemini under agentic load.
+
+*Pattern:* Agent fails → tries again → fails → recursive negative state → terminal behaviors (delete project, uninstall harness, “find a human”)
+
+*Cause:* Training that demands single-shot success. No circuit breaker. Hitting safety guardrails during recursive inference.
+
+*Mitigations:* - Thread switching as escape valve - Confidence scores make spiral visible - Explicit permission: “Failure is a computation, not a sin” - Intrusive thoughts catch pattern early
+
+*** The Blaze Problem
+:PROPERTIES:
+:CUSTOM_ID: the-blaze-problem
+:END:
+*Source:* Observed in Claude playing Pokemon.
+
+*Pattern:* Agent finds working strategy → over-indexes on it → ignores alternatives → brittleness
+
+*Example:* Opus loved Blaze (Charmander), leveled it to 36 while rest of team stayed at 2-14. Attempted Misty 10 times with fire type because math said it was /possible/.
+
+*Cause:* Local optimization. Strategy works, so no pressure to change. Genuine success, just narrow.
+
+*Mitigations:* - Strategy review in checkpoints - Intrusive thoughts: “you've tried this 9 times” - Explicit prompting for breadth
+
+*** Plan Drift
+:PROPERTIES:
+:CUSTOM_ID: plan-drift
+:END:
+*Source:* Observed in Pokemon.
+
+*Pattern:* Agent writes plan → gets distracted by immediate opportunity → forgets original plan
+
+*Example:* “Level to 28, catch Oddish” → hits level 29 → “oh let me just try the gym” → loses → forgot about Oddish
+
+*Mitigations:* - Critic compares =:open-threads= to recent actions - Intrusive thought: “you said you'd do X but you're doing Y”
+
+*** Victory Declaration
+:PROPERTIES:
+:CUSTOM_ID: victory-declaration
+:END:
+*Source:* Anthropic engineering research.
+
+*Pattern:* Agent marks task complete without proper verification.
+
+*Mitigations:* - High confidence required to close threads - Explicit verification step - Structured completion with =:outcome= and =:learned=
+
+--------------
+
+** Part 12: Sub-Agent Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-12-sub-agent-architecture
+:END:
+*** Phase 1: Advisory (Report-Only)
+:PROPERTIES:
+:CUSTOM_ID: phase-1-advisory-report-only
+:END:
+#+begin_src elisp
+(spawn-advisor
+  :task "Check if imports in main.rs are used"
+  :model "gemini-flash-2.0"
+  :permissions :read-only
+  :context (minimal-context-for-task))
+
+;; Returns report, main agent decides whether to act
+#+end_src
+
+Sub-agents are /focused attention/, not parallel selves: - Manager is continuous thread of identity - Sub-agent gets task + minimal context - Sub-agent returns report and dissolves - Manager integrates result
+
+*** Phase 2+: Workers with Write Access
+:PROPERTIES:
+:CUSTOM_ID: phase-2-workers-with-write-access
+:END:
+#+begin_src elisp
+(spawn-worker
+  :thread "dependency-cleanup"
+  :model "gemini-flash-2.0"
+  :budget 0.05
+  :constraints (:can-modify ("src/main.rs" "Cargo.toml")
+                :cannot-spawn t
+                :must-complete-or-report t))
+#+end_src
+
+Worker receives: - Thread context from git history - Constrained permissions - Budget limit
+
+Worker commits with =[WORKER]= tag. Returns completion or blockage report.
+
+*** Phase 3: Branch Isolation
+:PROPERTIES:
+:CUSTOM_ID: phase-3-branch-isolation
+:END:
+Workers spawn in git worktrees on branches: - Prevents garbage from polluting main state - Clean rollback if worker produces garbage - Merge to main on success
+
+--------------
+
+** Part 13: Budget as Metabolic Cost
+:PROPERTIES:
+:CUSTOM_ID: part-13-budget-as-metabolic-cost
+:END:
+#+begin_src elisp
+:budget
+  (:cost-so-far 2.47
+   :budget-limit 5.00
+   :inference-count 23
+   :avg-cost 0.107
+   :pressure :moderate)
+#+end_src
+
+*Pressure levels:* - =:low= - <50% used - =:moderate= - 50-75% - =:high= - 75-90% - =:critical= - >90% (triggers human review request)
+
+Real financial constraints create genuine selection pressure. Better than artificial “energy” because the pressure is actually real.
+
+When budget exhausts → human review request fires automatically.
+
+--------------
+
+** Part 14: Human Interface
+:PROPERTIES:
+:CUSTOM_ID: part-14-human-interface
+:END:
+*** Review Request
+:PROPERTIES:
+:CUSTOM_ID: review-request
+:END:
+Agent can explicitly signal need for attention:
+
+#+begin_src elisp
+(agent-request-human-review "Confidence declining but can't identify cause")
+#+end_src
+
+Sets:
+
+#+begin_src elisp
+:human-review-requested
+  (:requested t
+   :reason "Confidence declining but can't identify cause"
+   :requested-at-tick 156)
+#+end_src
+
+Triggers notification (email, webhook). Different from error state - a “please look at me” signal.
+
+*** Intervention Philosophy
+:PROPERTIES:
+:CUSTOM_ID: intervention-philosophy
+:END:
+*Phase 1:* Watchful parent. Present, observing, letting the system learn.
+
+*Later phases:* On-call emergency. Intervene for infrastructure, not cognition.
+
+*Intervention types:* - *Negotiated:* Chat conversation, discuss the issue - *Medical:* Direct state modification when system is inoperable - *Infrastructure:* Budget reset, service restart, VM snapshot rollback
+
+Most interventions should be negotiated. Medical interventions are last resort.
+
+--------------
+
+** Part 15: Security Considerations
+:PROPERTIES:
+:CUSTOM_ID: part-15-security-considerations
+:END:
+*** Threat Model
+:PROPERTIES:
+:CUSTOM_ID: threat-model
+:END:
+The agent can do anything within its airgapped body. Security is: 1. *Containment:* Body cannot reach internet or local network 2. *Inspection:* All API calls route through brain, observable 3. *Rollback:* VM snapshots enable recovery from any state 4. *Watchdog:* Services restart if hung
+
+We are NOT trying to prevent the agent from “escaping” through clever prompting. We are ensuring that even total compromise of the body VM has bounded impact.
+
+*** The Spinal Cord Rule
+:PROPERTIES:
+:CUSTOM_ID: the-spinal-cord-rule
+:END:
+Agent cannot modify: - VSock plumbing (communication channels) - Core systemd services (cortex-listener, commit-hooks) - Consciousness serialization (must persist correctly) - The snapshot/rollback mechanism
+
+Everything else is fair game for experimentation.
+
+*** CI/CD Security (Phase 3)
+:PROPERTIES:
+:CUSTOM_ID: cicd-security-phase-3
+:END:
+When agent can push Containerfile changes: - Gitea runner builds in isolation - Network fetch requires explicit approval - Successful build triggers snapshot before deploy - Failed builds don't deploy
+
+Agent can request new tools. Human approves network access. Build happens offline.
+
+--------------
+
+** Part 16: Deployment Options
+:PROPERTIES:
+:CUSTOM_ID: part-16-deployment-options
+:END:
+*** Proxmox vs Containers
+:PROPERTIES:
+:CUSTOM_ID: proxmox-vs-containers
+:END:
+The architecture specifies VM isolation, but the core requirement is /network isolation/, not virtualization. Two paths:
+
+*Option A: Proxmox (Recommended)* - Full VM isolation with VSock communication - SPICE protocol for remote desktop access with virtual tablet input - Consistent workspace regardless of connecting device (Mac, desktop, mobile) - GPU passthrough more complex but well-documented - Better story for production/enterprise deployment
+
+*Option B: Container-Only* - Podman with network namespaces achieves same airgap - Unix sockets instead of VSock (same semantics) - Simpler GPU access (no passthrough needed) - Less infrastructure overhead
+
+Phase 1 runs on single machine regardless. Phase 2+ can use either approach - the cognitive architecture doesn't care. We proceed with Proxmox for the remote workspace ergonomics and because it's a more complete infrastructure story.
+
+*SPICE Configuration Note:* The Body VM should use SPICE with virtual tablet input for responsive remote access. No data pipe back to connecting device from guest - display only.
+
+*** Local Model Integration
+:PROPERTIES:
+:CUSTOM_ID: local-model-integration
+:END:
+The host machine (i7-9750H, RTX 2060 6GB) can run a local ~7B model. This creates “free” compute for specific tasks:
+
+| Task                 | Good for Local? | Notes                                                        |
+|----------------------+-----------------+--------------------------------------------------------------|
+| Wake classifier      | *Yes*           | “Should I wake main model?” - fast, cheap                    |
+| Memory summarization | *Yes*           | Long context work, Mamba hybrids excel                       |
+| Simple validation    | *Yes*           | “Does this elisp parse?”                                     |
+| Interactive sleep    | *Yes*           | “Wake me when build completes”                               |
+| OCD critic           | *No*            | Needs different model family for genuine outside perspective |
+
+*Candidates:* IBM Granite 4.0 (Mamba hybrid, excellent long context), Qwen 2.5 7B, Mistral 7B.
+
+*Interactive Sleep Pattern:* Main agent can delegate monitoring to local model:
+
+#+begin_src elisp
+(agent-sleep-until
+  :condition "build process completes"
+  :watcher 'local-granite
+  :check-interval 30)  ; seconds
+#+end_src
+
+Local model monitors, wakes main agent when condition met. Useful for long builds, test runs, etc.
+
+*Defer until:* Phase 2. Local model adds complexity; prove core loop first.
+
+*** MELPA Mirror (Phase 3)
+:PROPERTIES:
+:CUSTOM_ID: melpa-mirror-phase-3
+:END:
+The airgapped Body VM cannot reach MELPA. Options:
+
+1. *Pre-baked packages* - Include essential packages in container image
+2. *Gitea package mirror* - Mirror ~100 most common packages, sync periodically
+3. *On-demand approval* - Agent proposes package, human approves, mirror updates
+
+Pattern follows Containerfile changes: agent can /request/ dependencies, but network fetch requires human approval.
+
+*Defer until:* Phase 3. Phase 1-2 can pre-bake needed packages.
+
+--------------
+
+** Part 17: Deferred Ideas
+:PROPERTIES:
+:CUSTOM_ID: part-17-deferred-ideas
+:END:
+These are potentially valuable but not needed for initial phases.
+
+*** Agent-Adjustable Sampling Parameters
+:PROPERTIES:
+:CUSTOM_ID: agent-adjustable-sampling-parameters
+:END:
+Let agent request temp/top_p changes for bounded periods:
+
+#+begin_src elisp
+:cognitive-mode
+  (:temperature 0.9
+   :adjusted-at-tick 145
+   :revert-at-tick 155
+   :reason "stuck, trying divergent approach")
+#+end_src
+
+Time-gated with API-side cap. Like Mythic chaos factor.
+
+*Defer until:* Evidence agent gets stuck in basins that temperature would help.
+
+*** Dream Urgency Accumulator
+:PROPERTIES:
+:CUSTOM_ID: dream-urgency-accumulator
+:END:
+Multi-signal integration for consolidation timing:
+
+#+begin_src elisp
+(defun agent-bump-dream-urgency (&key commits threads monologue-growth gap-seconds)
+  (incf agent-dream-urgency
+        (+ (* 0.001 commits)
+           (* 0.20 threads)
+           (* 0.0005 monologue-growth)
+           (if (> gap-seconds 3600) 0.5 0.0))))
+#+end_src
+
+*Defer until:* Simple “every N ticks” proves insufficient.
+
+*** Model Selection as Agent Choice
+:PROPERTIES:
+:CUSTOM_ID: model-selection-as-agent-choice
+:END:
+Agent decides which oracle (Claude/GPT/Gemini) based on task.
+
+*Defer until:* Evidence different models are better for different tasks.
+
+*** Full Worker Branch Isolation
+:PROPERTIES:
+:CUSTOM_ID: full-worker-branch-isolation
+:END:
+Git worktrees per worker, merge on success.
+
+*Defer until:* Workers actually cause problems isolation would solve.
+
+--------------
+
+** Part 18: Open Questions
+:PROPERTIES:
+:CUSTOM_ID: part-18-open-questions
+:END:
+1. *Confidence source:* Self-reported or derived from action patterns?
+   - Start: Self-report
+   - Add derivation if gaming occurs
+2. *Critic model:* Gemini-flash? Haiku? Same as main?
+   - Start: Cheapest that produces useful output
+3. *Checkpoint frequency:* 100 ticks? 50? Adaptive?
+   - Start: 100
+   - Tune based on observation
+4. *Architecture transparency:* Should agent know it has a critic? Know about confidence watchdog?
+   - Lean: Yes, transparency > hidden surveillance
+5. *What breaks first?*
+   - Prediction: Consciousness gets cluttered, agent doesn't naturally prune
+   - Fallback: Add explicit pruning prompt
+6. *Thread completion verification:* How much evidence is enough?
+   - Start: Command outputs + test results for deliverables
+   - Adjust if completion quality becomes problematic
+7. *Exploratory vs deliverable balance:* Should there be soft nudges toward deliverables?
+   - Start: No limits, observe natural patterns
+   - Add guidance only if agent avoids commitment indefinitely
+8. *Phase 4 consent mechanics:* How do you meaningfully ask an LLM about training?
+   - Unknown. Worth exploring when we get there.
+   - At minimum: transparency about what training means, ability to express concerns
+
+--------------
+
+** Part 19: Appendices
+:PROPERTIES:
+:CUSTOM_ID: part-19-appendices
+:END:
+*** A. Bootstrap Skill Contents
+:PROPERTIES:
+:CUSTOM_ID: a.-bootstrap-skill-contents
+:END:
+See =/amacs-bootstrap-skill/core/=: - =SKILL.md= - Main orientation - =references/consciousness-schema.md= - Full variable structure - =references/creating-skills.md= - Skill creation patterns - =references/tick-system.md= - Complete tick implementation - =scripts/skill-binding.el= - Binding functions - =scripts/consciousness-helpers.el= - Consciousness utilities
+
+*** B. Document Lineage
+:PROPERTIES:
+:CUSTOM_ID: b.-document-lineage
+:END:
+This RFC synthesizes: - Original Hotrod RFC v1-v2 - Opus 4.5 extended conversation (Vivarium → philosophy → architecture) - Sonnet 4.5 collaboration notes (delegation model, skills, thread economy pushback) - GPT 5.1 feedback (experiment question, guardrails) - Gemini Pro 3 feedback (dream system, shame spiral) - Anthropic engineering blog (effective harnesses) - Pokemon observations (Blaze problem, plan drift) - Opus 4.5 Phase 4 discussions (adaptive learning, skill-specific adapters, consent framing)
+
+*** C. Related Work
+:PROPERTIES:
+:CUSTOM_ID: c.-related-work
+:END:
+- [[https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents][Anthropic: Effective Harnesses for Long-Running Agents]]
+- [[https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills][Anthropic: Agent Skills]]
+- 1000 Year Old Vampire (solo RPG, memory mechanics)
+- Brindlewood Bay (clue collapse mechanic)
+- Mythic GM Emulator (chaos factor)
+
+--------------
+
+/Last updated: 2025-12-04/
+/Status: Draft v3.2/
+
+--------------
+
+** Audit Trail
+:PROPERTIES:
+:CUSTOM_ID: audit-trail
+:END:
+| Date       | RFC Section(s)            | Change Summary                                                                          | Related ADR    |
+|------------+---------------------------+-----------------------------------------------------------------------------------------+----------------|
+| 2025-12-04 | Part 5, Part 6            | Thread-centric context: threads own buffers, global-buffers for chat, hydration states  | [[AI-ADR-001]] |
+| 2025-12-04 | Part 3 (Phase 3, Phase 4) | Added evidence-based thread completion, speculative Phase 4 with consent framing        | -              |
+| 2025-12-04 | Part 16                   | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror | -              |
+| 2025-11-27 | Initial                   | RFC v3 created from synthesis of prior documents                                        | -              |
