@@ -6,13 +6,13 @@ tags:
   - phase-1
   - vampire-simulator
 date_created: 2025-11-27
-date_completed: 
-kanban-status: in-progress
+date_completed: 2025-12-06
+kanban-status: completed
 AI_IMP_spawned: 
   - AI-IMP-001 (completed)
   - AI-IMP-002 (completed)
-  - AI-IMP-003
-  - AI-IMP-004
+  - AI-IMP-003 (completed)
+  - AI-IMP-004 (completed)
 ---
 
 # AI-EPIC-001-vampire-simulator-core
@@ -54,15 +54,16 @@ Timeline: 1-2 sessions to complete all IMPs.
 
 ### Functional Requirements
 
-- [ ] FR-1: System shall define `agent-consciousness` variable per schema in RFC
-- [ ] FR-2: System shall persist consciousness to `~/.agent/consciousness.el` each tick
-- [ ] FR-3: System shall load persisted consciousness on Emacs startup (warm start)
-- [ ] FR-4: System shall provide `M-x agent-tick` command that increments tick counter
-- [ ] FR-5: System shall commit to git after each tick with monologue as message
-- [ ] FR-6: System shall append to `~/.agent/monologue.org` each tick
-- [ ] FR-7: System shall maintain rolling window of recent monologue in consciousness
-- [ ] FR-8: System shall load bootstrap skill on initialization
-- [ ] FR-9: System shall track skill usage in `:active-skills`
+- [x] FR-1: System shall define `agent-consciousness` variable per schema in RFC
+- [x] FR-2: System shall persist consciousness to `~/.agent/consciousness.el` each tick
+- [x] FR-3: System shall load persisted consciousness on Emacs startup (warm start)
+- [x] FR-4: System shall provide `M-x agent-tick` command that increments tick counter
+- [x] FR-5: System shall commit to git after each tick with monologue as message
+- [x] FR-6: System shall append to `~/.agent/monologue.org` each tick
+- [x] FR-7: System shall maintain rolling window of recent monologue in consciousness
+- [x] FR-8: System shall load bootstrap skill on initialization
+- [x] FR-9: System shall track skill usage in `:active-skills`
+- [x] FR-10: System shall support thread-centric context (threads own buffers, not global)
 
 ### Non-Functional Requirements 
 
@@ -78,4 +79,4 @@ Timeline: 1-2 sessions to complete all IMPs.
 | AI-IMP-001 | Heartbeat (consciousness + persistence + tick) | **completed** | Foundation |
 | AI-IMP-002 | Monologue system | **completed** | Depends on 001 |
 | AI-IMP-003 | Bootstrap skill loading | **completed** | Depends on 001 |
-| AI-IMP-004 | Thread-centric context | planned | Depends on 001, 002. See ADR-001 |
+| AI-IMP-004 | Thread-centric context | **completed** | Depends on 001, 002. See ADR-001 |

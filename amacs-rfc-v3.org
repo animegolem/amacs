@@ -1173,8 +1173,8 @@ This RFC synthesizes: - Original Hotrod RFC v1-v2 - Opus 4.5 extended conversati
 
 --------------
 
-/Last updated: 2025-12-04/
-/Status: Draft v3.2/
+/Last updated: 2025-12-06/
+/Status: Draft v3.3/
 
 --------------
 
@@ -1184,6 +1184,7 @@ This RFC synthesizes: - Original Hotrod RFC v1-v2 - Opus 4.5 extended conversati
 :END:
 | Date       | RFC Section(s)            | Change Summary                                                                          | Related ADR    |
 |------------+---------------------------+-----------------------------------------------------------------------------------------+----------------|
+| 2025-12-06 | Implementation            | EPIC-001 complete: IMP-001 through IMP-004 implemented. Phase 1 harness functional.     | -              |
 | 2025-12-04 | Part 5, Part 6            | Thread-centric context: threads own buffers, global-buffers for chat, hydration states  | [[AI-ADR-001]] |
 | 2025-12-04 | Part 3 (Phase 3, Phase 4) | Added evidence-based thread completion, speculative Phase 4 with consent framing        | -              |
 | 2025-12-04 | Part 16                   | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror | -              |

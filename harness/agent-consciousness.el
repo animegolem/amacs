@@ -143,23 +143,32 @@ Returns the new tick number."
     (agent-set :current-tick new-tick)
     new-tick))
 
+(defun agent--parse-iso-time (time-string)
+  "Parse ISO 8601 TIME-STRING into Emacs time value.
+Falls back to date-to-time if parse-iso8601-time-string unavailable."
+  (condition-case nil
+      (if (fboundp 'parse-iso8601-time-string)
+          (parse-iso8601-time-string time-string)
+        ;; Fallback for older Emacs
+        (date-to-time time-string))
+    (error nil)))
+
 (defun agent-check-gap ()
   "Check if there's been a long gap since last inference.
 Sets :long-gap-detected if gap > 1 hour. Returns gap in seconds or nil."
   (let ((last (agent-get :last-inference-time))
         (now (agent-get :current-time)))
     (when (and last now)
-      (condition-case nil
-          (let* ((last-time (parse-iso8601-time-string last))
-                 (now-time (parse-iso8601-time-string now))
-                 (diff (float-time (time-subtract now-time last-time))))
-            (agent-set :long-gap-detected (> diff 3600))
-            (when (> diff 3600)
-              (message "Long gap detected: %.1f hours since last tick" (/ diff 3600.0)))
-            diff)
-        (error 
-         (message "Could not parse timestamps for gap check")
-         nil)))))
+      (let ((last-time (agent--parse-iso-time last))
+            (now-time (agent--parse-iso-time now)))
+        (if (and last-time now-time)
+            (let ((diff (float-time (time-subtract now-time last-time))))
+              (agent-set :long-gap-detected (> diff 3600))
+              (when (> diff 3600)
+                (message "Long gap detected: %.1f hours since last tick" (/ diff 3600.0)))
+              diff)
+          (message "Could not parse timestamps for gap check")
+          nil)))))
 
 ;;; Confidence
 

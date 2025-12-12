@@ -6,13 +6,13 @@ tags:
   - phase-1
   - threads
   - context
-kanban_status: in-progress
+kanban_status: completed
 depends_on: 
   - AI-IMP-001
   - AI-IMP-002
 confidence_score: 0.8
 created_date: 2025-12-04
-close_date: 
+close_date: 2025-12-06
 --- 
 
 # AI-IMP-004-thread-centric-context
@@ -98,11 +98,11 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 - [x] Modify `agent-core.el`:
   - [x] Initialize default thread on cold start if none exists
   - [x] Require new modules
-- [ ] Test: create thread captures current buffer
-- [ ] Test: switch thread changes which buffers would be hydrated
-- [ ] Test: `*agent-chat*` always in context regardless of thread
-- [ ] Test: pending threads show as summaries, not full content
-- [ ] Test: context assembly produces expected structure
+- [x] Test: create thread captures current buffer
+- [x] Test: switch thread changes which buffers would be hydrated
+- [x] Test: `*agent-chat*` always in context regardless of thread
+- [x] Test: pending threads show as summaries, not full content
+- [x] Test: context assembly produces expected structure
  
 ### Acceptance Criteria
 
@@ -172,4 +172,22 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered 
 
-<!-- Fill during implementation -->
+**Backquote Structure Sharing Bug** (2025-12-06)
+
+The `agent-create-thread` function originally used backquote to construct the thread plist:
+
+```elisp
+`(:id ,thread-id ... :hydrated nil ...)
+```
+
+This caused a subtle bug where threads would have `:hydrated t` even though the template said `nil`. The cause: Emacs Lisp backquote optimizes by sharing cons cells for "constant" parts. When `agent--update-thread` later called `plist-put` to set `:hydrated t` on one thread, it mutated the shared structure, affecting all future backquote expansions.
+
+The first thread created returned `:hydrated nil` correctly. The second thread returned `:hydrated t` because the shared cons cell had been mutated.
+
+**Fix:** Use explicit `list` instead of backquote to ensure every call creates fresh cons cells:
+
+```elisp
+(list :id thread-id ... :hydrated nil ...)
+```
+
+**Lesson:** Avoid backquote for plists that will be destructively modified (via `plist-put`, `setf`, etc.). This is a classic Lisp gotcha that byte-compile won't catch.

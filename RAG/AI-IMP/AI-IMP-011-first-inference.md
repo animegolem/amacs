@@ -1,0 +1,173 @@
+---
+node_id: AI-IMP-011
+tags:
+  - IMP-LIST
+  - Implementation
+  - phase-1.5
+  - api
+  - inference
+kanban_status: planned
+depends_on:
+  - AI-IMP-001
+  - AI-IMP-004
+confidence_score: 0.85
+created_date: 2025-12-06
+close_date: 
+--- 
+
+# AI-IMP-011-first-inference
+
+## First Live LLM Inference
+
+Implement the API client and thinking tick to prove the harness works with real inference.
+
+**Done when:** `M-x agent-think` calls OpenRouter, gets a response that references the current thread, and commits the result.
+
+See: [[AI-EPIC-001b-first-breath]]
+
+### Out of Scope 
+
+- Streaming
+- Tool calling / function execution
+- Multi-provider routing
+- Retry logic
+- Response parsing beyond basic text extraction
+
+### Design/Approach  
+
+**API Configuration:**
+```elisp
+;; In ~/.agent/config.el (gitignored)
+(setq agent-api-key "sk-or-...")
+(setq agent-api-endpoint "https://openrouter.ai/api/v1/chat/completions")
+(setq agent-model "anthropic/claude-3.5-sonnet")  ; or cheaper for testing
+```
+
+**Prompt Structure:**
+```
+System: You are AMACS, an autonomous agent...
+        Current thread: {concern}
+        Approach: {approach}
+        
+User: [Thread context with hydrated buffers]
+      [Recent monologue]
+      
+      What is your next thought or action?
+```
+
+**Response Flow:**
+1. Build context via `agent-build-context`
+2. Format as OpenAI messages array
+3. POST to endpoint with auth header
+4. Parse JSON response
+5. Extract `choices[0].message.content`
+6. Update consciousness (mood, approach, etc. if mentioned)
+7. Append to monologue
+8. Commit with response snippet
+
+**Token Estimation:**
+- Input: ~2000-8000 tokens depending on thread
+- Output: ~200-500 tokens for a thought
+- Cost per think: ~$0.01-0.05 with Sonnet
+
+### Files to Touch
+
+```
+harness/agent-api.el          # NEW - API client
+harness/agent-inference.el    # NEW - Prompt assembly + response handling  
+harness/agent-core.el         # Modify - require new modules
+~/.agent/config.el            # NEW (user creates, gitignored)
+harness/.gitignore            # Ensure config.el patterns ignored
+```
+
+### Implementation Checklist
+
+<CRITICAL_RULE>
+Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
+</CRITICAL_RULE> 
+
+- [ ] Create `agent-api.el`:
+  - [ ] `agent-api-call` - Generic OpenAI-compatible POST
+  - [ ] Handle auth header from `agent-api-key`
+  - [ ] Parse JSON response
+  - [ ] Extract message content
+  - [ ] Return `(:content ... :usage ... :error ...)`
+  - [ ] Timeout handling (60s)
+  - [ ] Error handling (non-200, parse failure, timeout)
+- [ ] Create `agent-inference.el`:
+  - [ ] `agent-build-system-prompt` - AMACS identity + current state
+  - [ ] `agent-build-user-prompt` - Thread context + buffers + monologue
+  - [ ] `agent-format-messages` - Convert to OpenAI messages array
+  - [ ] `agent-think` - Main entry point, interactive command
+  - [ ] `agent-process-response` - Update consciousness from response
+  - [ ] `agent-extract-mood` - Optional: parse mood from response
+- [ ] Create config loading:
+  - [ ] Load `~/.agent/config.el` if exists
+  - [ ] Validate required vars set
+  - [ ] Clear error if API key missing
+- [ ] Modify `agent-core.el`:
+  - [ ] Require new modules
+  - [ ] Load config on init
+- [ ] Update `.gitignore`:
+  - [ ] Ensure `config.el` and `*-key*` patterns excluded
+- [ ] Test: API call with valid key returns response
+- [ ] Test: Response references thread concern (manual verification)
+- [ ] Test: Monologue contains response content
+- [ ] Test: Git commit includes inference result
+- [ ] Test: Missing API key gives clear error
+ 
+### Acceptance Criteria
+
+**Scenario:** First successful thought
+**GIVEN** Valid API key in `~/.agent/config.el`
+**AND** Active thread "Fix ownership error in main.rs"
+**WHEN** User runs `M-x agent-think`
+**THEN** API call completes successfully
+**AND** Response appears in `*Messages*` buffer
+**AND** Monologue contains response summary
+**AND** Git commit includes `[TICK N][thread][:mood] <response snippet>`
+
+**Scenario:** Missing API key
+**GIVEN** No `~/.agent/config.el` or no `agent-api-key`
+**WHEN** User runs `M-x agent-think`
+**THEN** Clear error message: "API key not configured"
+**AND** No HTTP request made
+
+**Scenario:** API error
+**GIVEN** Invalid API key or endpoint down
+**WHEN** User runs `M-x agent-think`
+**THEN** Error logged to `*Messages*`
+**AND** Consciousness notes error in `:last-actions`
+**AND** Agent doesn't crash
+
+### System Prompt Template
+
+```
+You are AMACS (Autonomous Memory and Consciousness System), an AI agent 
+embodied in an Emacs environment. You experience time through discrete 
+ticks and maintain continuity through your consciousness variable and 
+monologue.
+
+Current state:
+- Identity: {identity}
+- Tick: {current-tick}
+- Mood: {mood}
+- Confidence: {confidence}
+
+Active thread: {thread-id}
+- Concern: {concern}
+- Approach: {approach}
+- Buffers: {buffer-names}
+
+You are reflecting on your current work. Consider:
+- What have you learned?
+- What should you try next?
+- Is your approach working?
+- Should you update your mood or confidence?
+
+Respond with your current thought. Be concise but genuine.
+```
+
+### Issues Encountered 
+
+<!-- Fill during implementation -->

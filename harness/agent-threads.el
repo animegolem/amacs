@@ -66,41 +66,35 @@ Returns the new thread plist (not yet added to consciousness)."
                    'fundamental-mode)))
          (tags (agent-infer-skill-tags bufs mode))
          (thread-id (agent--generate-thread-id concern)))
-    `(:id ,thread-id
-      :started-tick ,(agent-current-tick)
-      :concern ,concern
-      :goal nil
-      :deliverable nil
-      :thread-type :exploratory
-      
-      ;; Context ownership
-      :buffers ,bufs
-      :primary-mode ,mode
-      :skill-tags ,tags
-      :hydrated nil
-      
-      ;; Work state
-      :priority 2
-      :approach nil
-      :blocking nil
-      
-      ;; Completion (filled later)
-      :completion-tick nil
-      :completion-evidence nil
-      :learned nil
-      
-      ;; Future
-      :active-loras nil)))
+    ;; Use list instead of backquote to avoid structure sharing issues
+    ;; (backquote can share cons cells, and plist-put mutates in place)
+    (list :id thread-id
+          :started-tick (agent-current-tick)
+          :concern concern
+          :goal nil
+          :deliverable nil
+          :thread-type :exploratory
+          :buffers bufs
+          :primary-mode mode
+          :skill-tags tags
+          :hydrated nil
+          :priority 2
+          :approach nil
+          :blocking nil
+          :completion-tick nil
+          :completion-evidence nil
+          :learned nil
+          :active-loras nil)))
 
 ;;; Thread Accessors
 
 (defun agent-get-thread (thread-id)
   "Get thread by THREAD-ID from open-threads or completed-threads."
   (or (cl-find thread-id (agent-get :open-threads)
-               :key (lambda (t) (plist-get t :id))
+               :key (lambda (thr) (plist-get thr :id))
                :test #'equal)
       (cl-find thread-id (agent-get :completed-threads)
-               :key (lambda (t) (plist-get t :id))
+               :key (lambda (thr) (plist-get thr :id))
                :test #'equal)))
 
 (defun agent-get-active-thread ()
@@ -112,8 +106,8 @@ Returns the new thread plist (not yet added to consciousness)."
 (defun agent-get-pending-threads ()
   "Return list of open threads that are not the active thread."
   (let ((active-id (agent-get :active-thread)))
-    (seq-filter (lambda (t)
-                  (not (equal (plist-get t :id) active-id)))
+    (seq-filter (lambda (thr)
+                  (not (equal (plist-get thr :id) active-id)))
                 (agent-get :open-threads))))
 
 ;;; Thread Mutation Helpers
@@ -123,12 +117,12 @@ Returns the new thread plist (not yet added to consciousness)."
 UPDATES is a plist of keys and values to set."
   (let ((threads (agent-get :open-threads)))
     (agent-set :open-threads
-               (mapcar (lambda (t)
-                         (if (equal (plist-get t :id) thread-id)
+               (mapcar (lambda (thr)
+                         (if (equal (plist-get thr :id) thread-id)
                              (cl-loop for (key val) on updates by #'cddr
-                                      do (setq t (plist-put t key val))
-                                      finally return t)
-                           t))
+                                      do (setq thr (plist-put thr key val))
+                                      finally return thr)
+                           thr))
                        threads))))
 
 ;;; Thread Lifecycle
@@ -173,8 +167,8 @@ ARGS is a plist with :evidence and :learned keys."
       
       ;; Move from open to completed
       (agent-set :open-threads
-                 (seq-filter (lambda (t)
-                               (not (equal (plist-get t :id) thread-id)))
+                 (seq-filter (lambda (thr)
+                               (not (equal (plist-get thr :id) thread-id)))
                              open-threads))
       (agent-set :completed-threads (cons thread completed-threads))
       
