@@ -25,6 +25,8 @@
 (require 'agent-threads)
 (require 'agent-context)
 (require 'agent-tick)
+(require 'agent-api)
+(require 'agent-inference)
 
 ;;; Variables
 
@@ -59,6 +61,11 @@
     (unless (file-exists-p gitignore)
       (with-temp-file gitignore
         (insert "# AMACS Agent .gitignore\n\n")
+        (insert "# API configuration (NEVER commit keys)\n")
+        (insert "config.el\n")
+        (insert "*-key*\n")
+        (insert "*.key\n")
+        (insert "secrets.el\n\n")
         (insert "# Emacs backup files\n")
         (insert "*~\n")
         (insert "\\#*\\#\n")
@@ -83,9 +90,12 @@ Returns the consciousness plist."
   ;; Ensure directories exist
   (agent--ensure-directories)
   (agent--ensure-gitignore)
-  
+
   ;; Initialize git repo if needed
   (agent-git-init)
+
+  ;; Load API configuration if available
+  (agent-load-config)
   
   ;; Initialize consciousness (warm or cold)
   (agent-init-consciousness force-cold)
