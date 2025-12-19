@@ -51,6 +51,7 @@ coverage/
 
 # Temporary files
 tmp/
+archive/
 temp/
 *.tmp
 *.cache
