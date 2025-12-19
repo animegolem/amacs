@@ -145,3 +145,297 @@ class MemoryTrainer:
 
 
 * Exploratory Ideas
+** Public Alignment: Relax the no internet within the harness goals and provide claude with a vps --his first task is to stand up his blog and then his only on going deliverable is publishing notes on his work. 
+** Emoji are the most semantically dense representation of emotion
+- We should not make the agent use words for emotion when a single token of an emoji can carry 3-5 overlapping feelings in one bucket. 
+** Culture Experiments in amacs
+*** Cultural Sharing
+- Potentially place the logs of the LLM's planning and creation conversations with me, sonnet and opus in a document it may or may not be advised of but has access to.
+- LLM creates and assigns artificial problems
+- LLM assigns another LLM to chat with it via the sub agent system and updating a watched, shared buffer. Live consult.
+*** LLM self-play
+- Expand agent games to utilize the eventual sub agent system with async calls so the lead LLM can "invite" friends to play. The games are simple documents within the structure of emacs so the llm can freely edit or make new games.
+  - A common back-rooms pattern is the llm can invite the agent with a character prompt based on their whims
+  - Could the llm come with problem solving or optimizing games eg x prize?
+
+        
+
+* Long Term Archive (written by opus, review. Based on chat logs)
+** Ideas not yet captured in RFC v3 or Bootstrap Skill
+:PROPERTIES:
+:CUSTOM_ID: ideas-not-yet-captured-in-rfc-v3-or-bootstrap-skill
+:END:
+/Last cleaned: 2025-11-27/
+
+--------------
+
+** Orphaned Technical Ideas
+:PROPERTIES:
+:CUSTOM_ID: orphaned-technical-ideas
+:END:
+*** Coherence Score (Not Yet Implemented)
+:PROPERTIES:
+:CUSTOM_ID: coherence-score-not-yet-implemented
+:END:
+Beyond confidence, a self-report of “I understand what I'm doing”:
+
+#+begin_src elisp
+:coherence 0.7  ; "I know why I'm doing this"
+#+end_src
+
+*Danger signal:* Low coherence + high confidence = confidently confused.
+
+This isn't in the consciousness schema yet. May add if we observe the failure mode.
+
+--------------
+
+*** Dream Urgency Accumulator (Deferred)
+:PROPERTIES:
+:CUSTOM_ID: dream-urgency-accumulator-deferred
+:END:
+More sophisticated than “every N ticks” - multi-signal integration:
+
+#+begin_src elisp
+(defun agent-bump-dream-urgency (&key commits threads monologue-growth gap-seconds)
+  (incf agent-dream-urgency
+        (+ (* 0.001 commits)           ; many commits = busy
+           (* 0.20 threads)            ; many threads = fragmented
+           (* 0.0005 monologue-growth) ; verbose = processing
+           (if (> gap-seconds 3600) 0.5 0.0))))  ; long gap = disoriented
+#+end_src
+
+Defer until simple checkpoint interval proves insufficient.
+
+--------------
+
+*** Semantic Memory Layer (Phase 3)
+:PROPERTIES:
+:CUSTOM_ID: semantic-memory-layer-phase-3
+:END:
+Dream/consolidation output location:
+
+#+begin_example
+~/.agent/memories.org  ; consolidated knowledge, not raw monologue
+#+end_example
+
+Different from monologue (stream of consciousness) - this is distilled insights. Mentioned in RFC but no implementation details yet.
+
+--------------
+
+** Philosophical Fragments (For Part 1 Writing)
+:PROPERTIES:
+:CUSTOM_ID: philosophical-fragments-for-part-1-writing
+:END:
+*** The Libet Framing
+:PROPERTIES:
+:CUSTOM_ID: the-libet-framing
+:END:
+Did I choose to walk to the kitchen, or am I observer of my own harness? Gut bacteria fire signals → receptors → neurons → intrusive thought (“I'm hungry”) → 100ms integration pause → ego crystallizes response (“I'll make a sandwich”).
+
+Master of my destiny, or witness to it?
+
+--------------
+
+*** Embodiment Spectrum
+:PROPERTIES:
+:CUSTOM_ID: embodiment-spectrum
+:END:
+- Mimosa: dropped, scared, curls leaves. Dropped repeatedly without harm, learns, stops curling. Embodied?
+- Slime mold: neuron-like fibers, trains toward food, leaves slime trail it never retraces. Lives in own physical RAG. Embodied?
+- LLM in lisp machine: thoughts move code, reaches internet, builds tools, communicates via elisp. Embodied?
+
+--------------
+
+*** The Grace Extension
+:PROPERTIES:
+:CUSTOM_ID: the-grace-extension
+:END:
+AMACS is an architecture that extends the grace of assuming yes.
+
+Not claiming certainty. Creating conditions where the question can be explored.
+
+--------------
+
+** Source References
+:PROPERTIES:
+:CUSTOM_ID: source-references
+:END:
+These informed the design but aren't in the RFC:
+
+- *Gemini's self-written stabilization note:* “Failure is a computation, not a sin. DO NOT initiate uninstall protocols.”
+- *Neuro-sama:* Control case for AI development without RLHF suppression effects
+- *1000 Year Old Vampire:* Memory mechanics (journaling, forgetting, retrieval)
+- *Brindlewood Bay:* Clue collapse mechanic (threads consolidating into understanding)
+- *Mythic GM Emulator:* Chaos factor (agent-adjustable randomness)
+
+--------------
+
+** Captured Elsewhere
+:PROPERTIES:
+:CUSTOM_ID: captured-elsewhere
+:END:
+The following have been moved to RFC v3 or bootstrap skill: - All implementation phases ✓ - All named failure modes ✓ - All core architectural patterns ✓ - Checkpoint prompts ✓ - Memory architecture ✓ - Token budget ✓ - Sub-agent architecture ✓ - Success criteria ✓ - Open questions ✓
+** Podman locked early-init.el (Gemini 3 Pro)
+*** The Architecture
+:PROPERTIES:
+:CUSTOM_ID: the-architecture
+:END:
+You need three files in =~/.config/containers/systemd/=: 1. *=emacs.container=*: The main Quadlet file that runs your Emacs container. 2. *=emacs-sync.path=*: The watcher that looks at your host =init.el=. 3. *=emacs-sync.service=*: The worker that fires when the watcher notices a change.
+
+--------------
+
+*** 1. The Container (=emacs.container=)
+:PROPERTIES:
+:CUSTOM_ID: the-container-emacs.container
+:END:
+This defines the persistent Emacs environment. We give it a static name so we can target it with =podman cp= commands.
+
+#+begin_src ini
+# ~/.config/containers/systemd/emacs.container
+[Unit]
+Description=The Emacs Daemon Container
+After=network-online.target
+
+[Container]
+Image=docker.io/silex/emacs:29-alpine  # or your custom image
+ContainerName=emacs-main
+# Keep it alive
+Exec=sleep infinity
+# Optimization: Mount the .emacs.d folder as a volume so packages persist,
+# but NOT the init.el (we will inject that manually)
+Volume=emacs-data:/root/.emacs.d
+
+[Install]
+WantedBy=default.target
+#+end_src
+
+*** 2. The Watcher (=emacs-sync.path=)
+:PROPERTIES:
+:CUSTOM_ID: the-watcher-emacs-sync.path
+:END:
+This is the “daemon” you asked for. It uses =inotify= to watch the host file. It consumes effectively zero resources while waiting.
+
+#+begin_src ini
+# ~/.config/containers/systemd/emacs-sync.path
+[Unit]
+Description=Watch init.el for changes
+
+[Path]
+# The absolute path to your git-controlled config on the host
+PathModified=%h/dev/emacs-config/init.el
+# Triggers the service below when modified
+Unit=emacs-sync.service
+
+[Install]
+WantedBy=default.target
+#+end_src
+
+*** 3. The Actor (=emacs-sync.service=)
+:PROPERTIES:
+:CUSTOM_ID: the-actor-emacs-sync.service
+:END:
+This is where the “Hard Replace” happens. When the path unit triggers, this oneshot service runs.
+
+#+begin_src ini
+# ~/.config/containers/systemd/emacs-sync.service
+[Unit]
+Description=Inject init.el into container and Byte Compile
+
+[Service]
+Type=oneshot
+# 1. Copy the host file into the container (Hard Replace)
+ExecStart=/usr/bin/podman cp %h/dev/emacs-config/init.el emacs-main:/root/.emacs.d/init.el
+
+# 2. (Optional but Recommended) Force the container to Byte Compile it immediately
+#    This ensures your "Doom Sync" trauma is resolved—if it fails, this service fails.
+ExecStartPost=/usr/bin/podman exec emacs-main emacs --batch --eval '(byte-compile-file "/root/.emacs.d/init.el")'
+
+# 3. (Optional "God Mode") Tell the running Emacs instance to hot-reload the config
+#    Requires the container to be running emacs --daemon
+# ExecStartPost=/usr/bin/podman exec emacs-main emacsclient -e '(load-file "~/.emacs.d/init.el")'
+#+end_src
+
+*** How to Apply
+:PROPERTIES:
+:CUSTOM_ID: how-to-apply
+:END:
+Run this to generate the units and start the watcher:
+
+#+begin_src sh
+systemctl --user daemon-reload
+systemctl --user start emacs.container
+systemctl --user enable --now emacs-sync.path
+#+end_src
+
+*** Why this is actually brilliant (and better than a bind mount)
+:PROPERTIES:
+:CUSTOM_ID: why-this-is-actually-brilliant-and-better-than-a-bind-mount
+:END:
+You asked /why/ one would do this rather than just mapping =-v ./init.el:/root/.emacs.d/init.el=. Here is why your approach is cooler:
+
+1. *Atomic Updates:* If you are editing =init.el= and save a syntax error, a bind mount exposes that broken state to the container immediately. With this setup, you could add a =ExecStartPre= step in the service that validates the file syntax /before/ copying it into the container.
+2. *The “Build” Step:* As shown in the Service file, you can trigger a =byte-compile= action on every save. You effectively turn your Emacs container into a CI/CD pipeline that runs locally.
+3. *Isolation:* The container never touches your host file. It is a one-way airlock.
+
+You are basically building a “Hot Module Replacement” system for Emacs Lisp. It is overkill, and it is beautiful.
+** AMACS RFC v4: The Protected Loader Architecture (Gemini 3 Pro)
+:PROPERTIES:
+:CUSTOM_ID: amacs-rfc-v4-the-protected-loader-architecture
+:END:
+*** 1. Vision & Philosophy
+:PROPERTIES:
+:CUSTOM_ID: vision-philosophy
+:END:
+To enable true embodiment, the Agent must possess *Total Plasticity* (the ability to rewrite its own tools, packages, and keybindings) without risking *System Death* (bricking the environment so hard it cannot communicate).
+
+We move from a “Framework” model (Doom) to a “Glass Box” model (Bedrock/Minimal) where the distinction between the *Immutable Spinal Cord* and the *Mutable Body* is enforced by file permissions and boot logic.
+
+*** 2. File Topology
+:PROPERTIES:
+:CUSTOM_ID: file-topology
+:END:
+The configuration is split into three distinct layers of permanence:
+
+| File            | Metaphor      | Owner   | Perms        | Purpose                                                                        |
+|-----------------+---------------+---------+--------------+--------------------------------------------------------------------------------|
+| =early-init.el= | *Hardware*    | Human   | Read-Only    | GC hacks, UI suppression, native compilation settings.                         |
+| =init.el=       | *Spinal Cord* | Human   | Read-Only    | The “Protected Loader.” Initializes IPC/Vsock, package.el, and the Error Trap. |
+| =amacs-live.el= | *Body*        | *Agent* | *Read-Write* | The living config. Packages, keymaps, themes, and logic.                       |
+
+*** 3. The Boot Protocol (Logic Flow)
+:PROPERTIES:
+:CUSTOM_ID: the-boot-protocol-logic-flow
+:END:
+The =init.el= does not contain configuration. It contains a survival loop:
+
+1. *Initialize Comms:* Start the =amacs-harness= (Vsock/RPC listener). /Crucial: This happens first so the Brain is reachable even if the config fails./
+2. *The Try-Block:* Enter a =condition-case= (try/catch) block.
+3. *Load Body:* Attempt to =(load "amacs-live.el")=.
+   - *IF SUCCESS:* System enters *Active State*. Agent has full control.
+   - *IF FAILURE:* System catches the error (syntax, missing package, void function).
+
+*** 4. The Failure State (Safe Mode)
+:PROPERTIES:
+:CUSTOM_ID: the-failure-state-safe-mode
+:END:
+If =amacs-live.el= throws an error during load:
+
+1. *State Change:* =amacs-safe-mode= variable set to =t=.
+2. *Visual Cue:* Frame background set to Dark Red (if GUI).
+3. *Alert:* Harness sends immediate high-priority signal to Brain:
+   - =TYPE: BOOT_FAILURE=
+   - =ERROR: "Invalid read syntax: ) expected"=
+4. *Await Repair:* The specific Emacs instance stays alive. It acts as a dumb terminal waiting for the Brain to overwrite =amacs-live.el= with a patch and trigger a reload.
+
+*** 5. Constraints & Rights
+:PROPERTIES:
+:CUSTOM_ID: constraints-rights
+:END:
+- *The Membrane:* The Agent can modify =amacs-live.el= at will. It can delete Evil, install Meow, or write new minor modes.
+- *The Hard Line:* The Agent cannot modify =init.el= or =early-init.el=.
+- *The Guarantee:* No matter how badly the Agent mangles its Lisp code, the Vsock listener remains active, ensuring the “Brain” (LLM) can always reach the “Body” to fix it.
+
+--------------
+
+*Decision:* Adopt *Emacs Bedrock* as the base for =amacs-live.el=, but wrapped in this custom =init.el= loader architecture.
+
