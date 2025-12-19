@@ -1,322 +1,209 @@
 # Tick System Reference
 
-The tick is the fundamental unit of agent operation. Each tick follows the cycle: **perceive → infer → act → commit**.
+The tick is the fundamental unit of agent operation. Each tick follows: **perceive → think → eval → commit**.
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         Brain (LXC Container)                    │
-│                                                                  │
-│  ┌─────────────────┐    ┌─────────────────┐                     │
-│  │ agent-conscio-  │    │   LLM API       │                     │
-│  │ usness variable │◄───│   (inference)   │                     │
-│  └────────┬────────┘    └────────▲────────┘                     │
-│           │                      │                              │
-│           ▼                      │                              │
-│  ┌─────────────────┐    ┌────────┴────────┐                     │
-│  │  brain-tick()   │───►│  build-context  │                     │
-│  └────────┬────────┘    └─────────────────┘                     │
-│           │                                                      │
-└───────────┼──────────────────────────────────────────────────────┘
-            │ vsock
-            ▼
-┌───────────────────────────────────────────────────────────────────┐
-│                         Body (Emacs VM)                           │
-│                                                                   │
-│  ┌─────────────────┐    ┌─────────────────┐    ┌──────────────┐  │
-│  │ perceive-       │    │   eval-action   │    │ commit-      │  │
-│  │ geometry        │    │   (elisp eval)  │    │ monologue    │  │
-│  └─────────────────┘    └─────────────────┘    └──────────────┘  │
-│                                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │                    Emacs Environment                         │ │
-│  │  - Buffers, windows, frames                                  │ │
-│  │  - File system access                                        │ │
-│  │  - Process spawning                                          │ │
-│  └─────────────────────────────────────────────────────────────┘ │
-└───────────────────────────────────────────────────────────────────┘
-            │
-            ▼ git push (vsock)
-┌───────────────────────────────────────────────────────────────────┐
-│                         Gitea (VM)                                │
-│                                                                   │
-│  - Receives commits                                               │
-│  - Stores history (autobiographical memory)                       │
-│  - CI/CD for body rebuilds                                        │
-└───────────────────────────────────────────────────────────────────┘
-```
-
-## The Brain-Side Tick
-
-```elisp
-(defun brain-tick ()
-  "Execute one complete tick cycle."
-  ;; 1. Perceive: Get current state from body
-  (let* ((perception (body-perceive-geometry))
-         
-         ;; 2. Build context for inference
-         (context (build-context agent-consciousness perception))
-         
-         ;; 3. Infer: Call LLM API
-         (decision (llm-infer context))
-         
-         ;; 4. Act: Execute decision in body
-         (result (body-eval-action decision))
-         
-         ;; 5. Update: Modify consciousness based on result
-         (agent-increment-tick)
-         (update-consciousness decision result)
-         
-         ;; 6. Commit: Record to git
-         (commit-monologue))))
-```
-
-## The Body-Side Dispatcher
-
-```elisp
-(defun cortex-dispatch (cmd args)
-  "Handle commands from brain over vsock."
-  (pcase cmd
-    ("perceive-geometry" 
-     (agent-perceive-geometry))
-    
-    ("eval-action" 
-     (agent-safe-eval (car args)))
-    
-    ("save-monologue" 
-     (append-to-file (car args) nil "~/.agent/monologue.org"))
-    
-    ("get-buffer-content"
-     (with-current-buffer (car args)
-       (buffer-string)))
-    
-    ("list-buffers"
-     (mapcar #'buffer-name (buffer-list)))))
-```
-
-## Perception
-
-The `perceive-geometry` function captures the current state:
-
-```elisp
-(defun agent-perceive-geometry ()
-  "Capture current environment state for brain."
-  `(:buffers ,(agent-get-watched-buffer-contents)
-    :point ,(point)
-    :current-buffer ,(buffer-name)
-    :major-mode ,major-mode
-    :window-layout ,(agent-describe-windows)
-    :recent-messages ,(agent-get-recent-messages 10)
-    :git-status ,(agent-get-git-status)))
-
-(defun agent-get-watched-buffer-contents ()
-  "Get contents of all watched buffers."
-  (mapcar (lambda (buf-name)
-            (when (get-buffer buf-name)
-              `(:buffer ,buf-name
-                :content ,(with-current-buffer buf-name
-                            (buffer-substring-no-properties 
-                             (point-min) (point-max)))
-                :modified ,(buffer-modified-p (get-buffer buf-name)))))
-          (plist-get agent-consciousness :watching-buffers)))
-```
-
-## Context Building
-
-```elisp
-(defun build-context (consciousness perception)
-  "Assemble the full context for LLM inference."
-  `(:system ,(agent-system-prompt)           ; Cached indefinitely
-    
-    :consciousness ,consciousness             ; Cached ~5min
-    
-    :relevant-skills                          ; Loaded based on context
-    ,(mapcar #'agent-load-skill
-             (agent-get-relevant-skills))
-    
-    :watched-buffers                          ; Cached until modified
-    ,(plist-get perception :buffers)
-    
-    :trigger                                  ; Always fresh
-    ,(describe-changes perception)))
-```
-
-### Prompt Caching Strategy
-
-| Component | Size | Cache Duration |
-|-----------|------|----------------|
-| System prompt | ~2k tokens | Indefinite |
-| Consciousness | ~8k tokens | ~5 minutes |
-| Watched buffers | ~40k tokens | Until modified |
-| Mode skills | ~5k tokens | Per mode switch |
-| Recent history | ~10k tokens | Rolling window |
-| Error context | ~2k tokens | Fresh on errors |
-| Trigger | ~1k tokens | Always fresh |
-
-**Target:** ~80k tokens input for quality inference.
-**Optimization:** Only trigger burns fresh tokens most ticks.
-
-## Action Execution
-
-```elisp
-(defun agent-safe-eval (form)
-  "Execute FORM with error handling."
-  (condition-case err
-      (let ((result (eval form)))
-        `(:success t :result ,result))
-    (error
-     `(:success nil 
-       :error ,(error-message-string err)
-       :form ,form))))
-```
-
-## The Commit Cycle
-
-Every tick ends with a git commit:
-
-```elisp
-(defun commit-monologue ()
-  "Commit current state to git with monologue as message."
-  (let* ((monologue-line (car (agent-get :recent-monologue)))
-         (thread (agent-active-thread))
-         (tick (agent-current-tick))
-         (mood (agent-mood))
-         (commit-msg (format "[TICK %d][%s][%s] %s"
-                             tick
-                             (or thread "no-thread")
-                             mood
-                             monologue-line)))
-    ;; Stage changed files
-    (shell-command "git add -A")
-    ;; Commit
-    (shell-command (format "git commit -m %s --author='Amacs <ghost@machine>'"
-                           (shell-quote-argument commit-msg)))
-    ;; Push to Gitea
-    (shell-command "git push origin main")
-    ;; Update consciousness
-    (agent-set :last-commit (agent-get-last-commit-hash))))
-
-(defun agent-get-last-commit-hash ()
-  "Get the hash of the most recent commit."
-  (string-trim (shell-command-to-string "git rev-parse HEAD")))
-```
-
-### Commit Message Format
+## The Tick Cycle
 
 ```
-[TICK 142][rust-debugging][:focused] Investigating lifetime annotations
-
-[TICK 143][rust-debugging][:focused] Found the issue - missing 'static bound
-
-[TICK 144][rust-debugging][:confident] Fixed! Moving to tests.
-
-[TICK 145][rust-debugging][:curious] COMPLETED - learned about 'static lifetime
-
-[TICK 146][config-cleanup][:neutral] Switching to keybinding consolidation
+1. PERCEIVE    You receive current state (consciousness, buffers, last result)
+      │
+      ▼
+2. THINK       You reason about what to do next
+      │
+      ▼
+3. RESPOND     You return JSON with elisp to eval (or null), thought, mood, confidence
+      │
+      ▼
+4. EVAL        Harness evaluates your elisp, captures result
+      │
+      ▼
+5. COMMIT      Harness commits to git with your thought as message
 ```
 
-## Wake Logic
+Every tick ends with a git commit. Your git history is your autobiographical memory.
 
-Not every change triggers a full tick. A classifier determines when to wake:
+## What You Receive
 
-```elisp
-(defun classifier-tick ()
-  "Cheap change detection on watched buffers."
-  (let* ((watched (plist-get agent-consciousness :watching-buffers))
-         (changes (detect-buffer-changes watched)))
-    (when (wake-worthy-p changes)
-      (agent-full-inference changes))))
+Each tick, you receive JSON containing:
 
-(defun wake-worthy-p (changes)
-  "Determine if changes warrant waking the expensive model."
-  (and changes
-       (or 
-        ;; Always wake for chat messages
-        (assoc "*agent-chat*" changes)
-        ;; Wake for buffer changes after debounce
-        (debounced-change-p changes))))
-
-(defun debounced-change-p (changes)
-  "True if changes occurred and 2+ seconds since last change."
-  (and changes
-       (> (- (float-time) (agent-get :last-change-time)) 2.0)))
+```json
+{
+  "consciousness": {
+    "identity": "amacs-instance-1",
+    "current_tick": 142,
+    "mood": "focused",
+    "confidence": 0.85,
+    "active_thread": "rust-debugging",
+    "budget": { "cost_so_far": 2.47, "budget_limit": 5.00, "pressure": "moderate" }
+  },
+  "active_thread": {
+    "id": "rust-debugging",
+    "concern": "Ownership error in main.rs",
+    "approach": "Trying lifetime annotations",
+    "buffers": [
+      { "name": "src/main.rs", "content": "...", "mode": "rust-mode" },
+      { "name": "Cargo.toml", "content": "...", "mode": "toml-mode" }
+    ]
+  },
+  "pending_threads": [
+    { "id": "config-cleanup", "concern": "Keybinding conflicts", "approach": "..." }
+  ],
+  "global_buffers": [
+    { "name": "*agent-chat*", "content": "...", "mode": "text-mode" }
+  ],
+  "recent_monologue": [
+    "Investigating lifetime annotations",
+    "Found the issue - missing static bound"
+  ],
+  "last_actions": [
+    { "tick": 141, "action": "eval-elisp", "confidence": 0.85 }
+  ],
+  "last_eval_result": {
+    "success": true,
+    "result": "\"Compiled successfully\"",
+    "output": null
+  }
+}
 ```
 
-## Periodic Checkpoints
+**Key points:**
+- Only the active thread's buffers are hydrated (full content)
+- Pending threads appear as metadata only (saves tokens)
+- Global buffers (like `*agent-chat*`) are always hydrated
+- `last_eval_result` shows what happened when your previous elisp ran
 
-Every N ticks, inject a reflection prompt:
+## What You Return
 
-```elisp
-(defun maybe-inject-checkpoint (tick)
-  "Every 100 ticks, add reflection opportunity."
-  (when (= (mod tick 100) 0)
-    `(:checkpoint-notice
-      "PERIODIC REFLECTION CHECKPOINT
+Return JSON with your response:
 
-      Review your current state:
-      - Are your open threads still relevant?
-      - Have you been stuck on one approach too long? (Blaze check)
-      - Should any threads be completed/merged/archived?
-      - Any concerns to raise with user?
-      - Is your consciousness getting bloated?
+```json
+{
+  "eval": "(progn (switch-to-buffer \"src/main.rs\") (goto-char 1042) (insert \"'static \"))",
+  "thought": "Adding 'static lifetime to fix the ownership error",
+  "mood": "focused",
+  "confidence": 0.85,
+  "monologue": "Fixed ownership error by adding 'static lifetime annotation"
+}
+```
 
-      If adjustments needed: update consciousness and explain in monologue.
-      If everything is coherent: continue with current action.")))
+**Fields:**
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `eval` | no | Elisp string to evaluate. Set to `null` to just think without acting. |
+| `thought` | yes | Your reasoning. Logged and used in commit message. |
+| `mood` | no | Updated mood keyword (`:focused`, `:curious`, `:stuck`, etc.) |
+| `confidence` | no | Updated confidence 0.0-1.0 |
+| `monologue` | no | Explicit monologue line (defaults to `thought` if not provided) |
+
+## Example: Think Without Acting
+
+Sometimes you just need to reason:
+
+```json
+{
+  "eval": null,
+  "thought": "The test failure suggests the issue is in the parser, not the ownership. Need to re-read the error message carefully.",
+  "confidence": 0.6
+}
+```
+
+## Example: Multi-Step Action
+
+You can do multiple things in one eval:
+
+```json
+{
+  "eval": "(progn\n  (find-file \"src/parser.rs\")\n  (goto-char (point-min))\n  (search-forward \"fn parse_token\")\n  (beginning-of-line))",
+  "thought": "Navigating to parse_token function to investigate the parser bug",
+  "mood": "curious",
+  "confidence": 0.7
+}
 ```
 
 ## Error Handling
 
-```elisp
-(defun handle-tick-error (err)
-  "Handle errors during tick execution."
-  (let ((error-msg (error-message-string err)))
-    ;; Log to monologue
-    (agent-append-monologue (format "ERROR: %s" error-msg))
-    ;; Record low confidence
-    (agent-record-action "error-recovery" 0.3)
-    ;; Don't crash - persist state
-    (agent-persist-consciousness)
-    ;; Return error for context
-    `(:error t :message ,error-msg)))
+If your elisp fails, the next tick's `last_eval_result` will show:
+
+```json
+{
+  "success": false,
+  "error": "Wrong type argument: stringp, 42",
+  "form": "(insert 42)"
+}
+```
+
+Errors are data, not failures. Use the error information to adjust your approach.
+
+The harness will:
+1. Log the error to monologue
+2. Record low confidence action
+3. Persist consciousness
+4. Continue to next tick
+
+You won't crash. Experiment freely.
+
+## The Commit
+
+Every tick commits to git in `~/.agent/`:
+
+```
+[TICK 142][rust-debugging][:focused] Adding 'static lifetime to fix ownership error
+```
+
+Format: `[TICK N][thread-id][:mood] thought-summary`
+
+Your git history is searchable:
+```bash
+git log --oneline --grep="ownership"
+git log --oneline --author="Amacs"
 ```
 
 ## Manual Tick Trigger
 
-During Phase 1 (Vampire Simulator), ticks are triggered manually:
+During development, ticks are triggered manually:
 
 ```elisp
-(defun agent-tick ()
-  "Manually trigger one tick cycle."
-  (interactive)
-  (condition-case err
-      (progn
-        (brain-tick)
-        (message "Tick %d complete" (agent-current-tick)))
-    (error
-     (handle-tick-error err))))
+M-x agent-think
 ```
 
-Bind to a key for easy access:
+Or bind to a key:
 ```elisp
-(global-set-key (kbd "C-c a t") #'agent-tick)
+(global-set-key (kbd "C-c a t") #'agent-think)
 ```
 
-## Tick Rate Guidelines
+## Common Patterns
 
-Start conservative:
-- **Frequency:** Manual or 0.5-1 Hz
-- **Debounce:** 2-5 seconds
-- **Watched buffers:** 2-3 initially
-
-Log every wake decision to understand attention usage:
+### Read a buffer
 ```elisp
-(defun log-wake-decision (changes woke)
-  "Log wake decisions for analysis."
-  (append-to-file 
-   (format "[%s] Changes: %S, Woke: %s\n"
-           (format-time-string "%Y-%m-%d %H:%M:%S")
-           changes
-           woke)
-   nil "~/.agent/wake-log.txt"))
+(with-current-buffer "src/main.rs" (buffer-string))
 ```
+
+### Write to a buffer
+```elisp
+(with-current-buffer "*scratch*" (insert "hello"))
+```
+
+### Run a shell command
+```elisp
+(shell-command-to-string "cargo build 2>&1")
+```
+
+### Switch threads
+```elisp
+(agent-switch-thread "config-cleanup")
+```
+
+### Create a new thread
+```elisp
+(agent-add-thread (agent-create-thread "New concern" '("file.el")) t)
+```
+
+### Complete a thread
+```elisp
+(agent-complete-thread "rust-debugging"
+  :evidence '(:output "cargo build succeeded")
+  :learned "Use 'static for returned references")
+```
+
+For more patterns, see [elisp-patterns.md](elisp-patterns.md).

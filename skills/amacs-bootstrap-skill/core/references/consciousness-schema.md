@@ -25,24 +25,41 @@ The `agent-consciousness` variable is your working memory. It's an elisp plist t
     :open-threads
       ((:id "rust-debugging"
         :started-tick 142
-        :priority 1
         :concern "Ownership error in main.rs"
+        :goal "Fix ownership error so cargo build passes"
+        :deliverable "cargo build succeeds with no errors"
+        :thread-type :deliverable
         :buffers ("src/main.rs" "Cargo.toml")
+        :primary-mode rust-mode
+        :skill-tags ("rust")
+        :hydrated t              ; Active thread - full buffer contents in context
+        :priority 1
         :approach "Trying lifetime annotations"
         :blocking t)
-       
+
        (:id "config-cleanup"
         :started-tick 98
-        :priority 3
         :concern "Keybinding conflicts"
+        :goal nil
+        :deliverable nil
+        :thread-type :exploratory
         :buffers ("init.el")
+        :primary-mode emacs-lisp-mode
+        :skill-tags ("emacs-lisp")
+        :hydrated nil            ; Pending thread - metadata only in context
+        :priority 3
         :approach "Consolidate custom bindings"
         :blocking nil))
     
     :completed-threads
       ((:id "dependency-update"
-        :completed-tick 140
-        :outcome "Success - updated 3 packages"
+        :started-tick 120
+        :concern "Outdated dependencies"
+        :completion-tick 140
+        :completion-evidence
+          (:cargo-output "Updated 3 packages"
+           :test-results "All tests passing"
+           :files-changed ("Cargo.toml" "Cargo.lock"))
         :learned "Always check changelog first"))
     
     ;; Action history (for confidence tracking)
@@ -52,7 +69,7 @@ The `agent-consciousness` variable is your working memory. It's an elisp plist t
        (:tick 140 :action "git-commit" :confidence 0.90))
     
     ;; Context management
-    :watching-buffers ("src/main.rs" "Cargo.toml" "*agent-chat*")
+    :global-buffers ("*agent-chat*")  ; Always-visible buffers (human interface)
     :focus (:buffer "src/main.rs" :line 42)
     
     ;; Memory pointers
@@ -117,11 +134,39 @@ The `agent-consciousness` variable is your working memory. It's an elisp plist t
 ```elisp
 (:id "thread-name"
  :started-tick N
- :priority 1-5        ; 1 = highest
- :concern "..."       ; What problem this addresses
- :buffers ("...")     ; Relevant files
- :approach "..."      ; Current strategy
- :blocking t/nil)     ; Is this blocking other work?
+ :concern "..."                ; What problem this addresses
+ :goal "..."                   ; Specific objective (optional)
+ :deliverable "..."            ; Verifiable completion criteria (optional)
+ :thread-type :exploratory     ; or :deliverable
+ :buffers ("...")              ; Relevant files
+ :primary-mode rust-mode       ; Major mode of primary buffer
+ :skill-tags ("rust")          ; Inferred skill tags
+ :hydrated t/nil               ; Is buffer content loaded in context?
+ :priority 1-5                 ; 1 = highest
+ :approach "..."               ; Current strategy
+ :blocking t/nil)              ; Is this blocking other work?
+```
+
+### Thread Hydration
+
+Threads have two states:
+- **Hydrated** (`:hydrated t`): Full buffer contents included in context
+- **Dehydrated** (`:hydrated nil`): Only metadata (concern, approach) in context
+
+Only the active thread is hydrated. Pending threads are dehydrated to save tokens.
+Global buffers (`:global-buffers`) are always hydrated regardless of which thread is active.
+
+**Completed thread structure:**
+```elisp
+(:id "thread-name"
+ :started-tick N
+ :concern "..."
+ :completion-tick M
+ :completion-evidence
+   (:output "..."              ; Relevant command output
+    :test-results "..."        ; Test outcomes if applicable
+    :files-changed ("..."))    ; Files modified
+ :learned "...")               ; Key insight for future reference
 ```
 
 ### Action History
@@ -136,8 +181,10 @@ This is what the human watchdog monitors. Sustained declining confidence = alarm
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `:watching-buffers` | list | Buffers that trigger wake on change |
-| `:focus` | plist | Current cursor position |
+| `:global-buffers` | list | Buffers always included regardless of active thread |
+| `:focus` | plist | Current cursor position (follows active thread) |
+
+Note: Buffer watching is now per-thread via the thread's `:buffers` field.
 
 ### Memory
 
