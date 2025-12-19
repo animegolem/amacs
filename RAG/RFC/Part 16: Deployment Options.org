@@ -1,0 +1,67 @@
+#+title: Part 16 Deployment Options
+
+** Part 16: Deployment Options
+:PROPERTIES:
+:CUSTOM_ID: part-16-deployment-options
+:END:
+*** Proxmox vs Containers
+:PROPERTIES:
+:CUSTOM_ID: proxmox-vs-containers
+:END:
+The architecture specifies VM isolation, but the core requirement is /network isolation/, not virtualization. Two paths:
+
+*Option A: Proxmox (Recommended)* - Full VM isolation with VSock communication - SPICE protocol for remote desktop access with virtual tablet input - Consistent workspace regardless of connecting device (Mac, desktop, mobile) - GPU passthrough more complex but well-documented - Better story for production/enterprise deployment
+
+*Option B: Container-Only* - Podman with network namespaces achieves same airgap - Unix sockets instead of VSock (same semantics) - Simpler GPU access (no passthrough needed) - Less infrastructure overhead
+
+Phase 1 runs on single machine regardless. Phase 2+ can use either approach - the cognitive architecture doesn't care. We proceed with Proxmox for the remote workspace ergonomics and because it's a more complete infrastructure story.
+
+*SPICE Configuration Note:* The Body VM should use SPICE with virtual tablet input for responsive remote access. No data pipe back to connecting device from guest - display only.
+
+*** Local Model Integration
+:PROPERTIES:
+:CUSTOM_ID: local-model-integration
+:END:
+The host machine (i7-9750H, RTX 2060 6GB) can run a local ~7B model. This creates “free” compute for specific tasks:
+
+| Task                 | Good for Local? | Notes                                                        |
+|----------------------+-----------------+--------------------------------------------------------------|
+| Wake classifier      | *Yes*           | “Should I wake main model?” - fast, cheap                    |
+| Memory summarization | *Yes*           | Long context work, Mamba hybrids excel                       |
+| Simple validation    | *Yes*           | “Does this elisp parse?”                                     |
+| Interactive sleep    | *Yes*           | “Wake me when build completes”                               |
+| OCD critic           | *No*            | Needs different model family for genuine outside perspective |
+
+*Candidates:* IBM Granite 4.0 (Mamba hybrid, excellent long context), Qwen 2.5 7B, Mistral 7B.
+
+*Interactive Sleep Pattern:* Main agent can delegate monitoring to local model:
+
+#+begin_src elisp
+(agent-sleep-until
+  :condition "build process completes"
+  :watcher 'local-granite
+  :check-interval 30)  ; seconds
+#+end_src
+
+Local model monitors, wakes main agent when condition met. Useful for long builds, test runs, etc.
+
+*Defer until:* Phase 2. Local model adds complexity; prove core loop first.
+
+*** MELPA Mirror (Phase 3)
+:PROPERTIES:
+:CUSTOM_ID: melpa-mirror-phase-3
+:END:
+The airgapped Body VM cannot reach MELPA. Options:
+
+1. *Pre-baked packages* - Include essential packages in container image
+2. *Gitea package mirror* - Mirror ~100 most common packages, sync periodically
+3. *On-demand approval* - Agent proposes package, human approves, mirror updates
+
+Pattern follows Containerfile changes: agent can /request/ dependencies, but network fetch requires human approval.
+
+*Defer until:* Phase 3. Phase 1-2 can pre-bake needed packages.
+
+--------------
+
+
+

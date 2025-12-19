@@ -1,0 +1,24 @@
+#+title: Audit Trail
+
+** Audit Trail
+:PROPERTIES:
+:CUSTOM_ID: audit-trail
+:END:
+| Date       | RFC Section(s)            | Change Summary                                                                                              | Related ADR    |
+|------------+---------------------------+-------------------------------------------------------------------------------------------------------------+----------------|
+| 2025-12-18 | Part 3 (major rewrite)    | Phase restructuring: 1→1b→2→3→4→5. Code-mode over tool-calling. Infrastructure deferred to Phase 3.         | [[AI-ADR-002]] |
+| 2025-12-18 | RFC structure             | Split monolithic RFC into 21 separate org files for maintainability                                         | -              |
+| 2025-12-06 | Implementation            | EPIC-001 complete: IMP-001 through IMP-004 implemented. Phase 1 harness functional.                         | -              |
+| 2025-12-04 | Part 5, Part 6            | Thread-centric context: threads own buffers, global-buffers for chat, hydration states                      | [[AI-ADR-001]] |
+| 2025-12-04 | Part 3 (Phase 3, Phase 4) | Added evidence-based thread completion, speculative Phase 4 with consent framing                            | -              |
+| 2025-12-04 | Part 16                   | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror                     | -              |
+| 2025-11-27 | Initial                   | RFC v3 created from synthesis of prior documents                                                            | -              |
+
+** Version History
+| Version | Date       | Summary                                                    |
+|---------+------------+------------------------------------------------------------|
+| v3.4    | 2025-12-18 | Phase restructuring, code-mode paradigm, RFC split         |
+| v3.3    | 2025-12-06 | EPIC-001 completion                                        |
+| v3.2    | 2025-12-04 | Thread-centric context, evidence-based completion          |
+| v3.1    | 2025-12-04 | Deployment options                                         |
+| v3.0    | 2025-11-27 | Initial RFC v3                                             |

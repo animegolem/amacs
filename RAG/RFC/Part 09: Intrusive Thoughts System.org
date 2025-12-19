@@ -1,0 +1,58 @@
+#+title: Part 9 Intrusive Thoughts System
+
+** Part 9: Intrusive Thoughts System
+:PROPERTIES:
+:CUSTOM_ID: part-9-intrusive-thoughts-system
+:END:
+*** The Insight
+:PROPERTIES:
+:CUSTOM_ID: the-insight
+:END:
+The main agent is /in/ the flow, optimizing locally. The critic is /outside/, checking for gaps between intent and behavior.
+
+Like OCD intrusive thoughts: you don't choose them, they arrive. Agency is in the response, not the receipt.
+
+*** Implementation
+:PROPERTIES:
+:CUSTOM_ID: implementation
+:END:
+Every N ticks (checkpoint interval):
+
+#+begin_example
+1. Assemble main agent context
+
+2. Parallel call to critic (gemini-flash or haiku):
+   - Same consciousness snapshot
+   - Prompt: "Review this agent's state. What are they missing? 
+     What pattern are they stuck in? What did they say they'd do 
+     that they haven't? 1-2 paragraphs max."
+
+3. Inject into main agent prompt:
+
+   <INTRUSIVE_THOUGHTS source="external-critic">
+   [critic output]
+   </INTRUSIVE_THOUGHTS>
+   
+   These thoughts are external observations. You maintain full 
+   agency over whether to incorporate them.
+
+4. Main agent proceeds with full autonomy.
+#+end_example
+
+*** What the Critic Catches
+:PROPERTIES:
+:CUSTOM_ID: what-the-critic-catches
+:END:
+| Problem               | Critic Observation                                             |
+|-----------------------+----------------------------------------------------------------|
+| Strategy ossification | “You've tried this approach 9 times”                           |
+| Plan drift            | “You said you'd catch an Oddish but you're walking to the gym” |
+| Tunnel vision         | “There's an unexplored option you haven't considered”          |
+| Coherence gaps        | “Your thread says X but your action implies Y”                 |
+
+*Cost:* ~$0.005/checkpoint with cheap model. Negligible.
+
+--------------
+
+
+

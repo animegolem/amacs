@@ -1,0 +1,37 @@
+#+title: Part 19 Appendices
+
+** Part 19: Appendices
+:PROPERTIES:
+:CUSTOM_ID: part-19-appendices
+:END:
+*** A. Bootstrap Skill Contents
+:PROPERTIES:
+:CUSTOM_ID: a.-bootstrap-skill-contents
+:END:
+See =/amacs-bootstrap-skill/core/=: - =SKILL.md= - Main orientation - =references/consciousness-schema.md= - Full variable structure - =references/creating-skills.md= - Skill creation patterns - =references/tick-system.md= - Complete tick implementation - =scripts/skill-binding.el= - Binding functions - =scripts/consciousness-helpers.el= - Consciousness utilities
+
+*** B. Document Lineage
+:PROPERTIES:
+:CUSTOM_ID: b.-document-lineage
+:END:
+This RFC synthesizes: - Original Hotrod RFC v1-v2 - Opus 4.5 extended conversation (Vivarium → philosophy → architecture) - Sonnet 4.5 collaboration notes (delegation model, skills, thread economy pushback) - GPT 5.1 feedback (experiment question, guardrails) - Gemini Pro 3 feedback (dream system, shame spiral) - Anthropic engineering blog (effective harnesses) - Pokemon observations (Blaze problem, plan drift) - Opus 4.5 Phase 4 discussions (adaptive learning, skill-specific adapters, consent framing)
+
+*** C. Related Work
+:PROPERTIES:
+:CUSTOM_ID: c.-related-work
+:END:
+- [[https://www.anthropic.com/engineering/effective-harnesses-for-long-running-agents][Anthropic: Effective Harnesses for Long-Running Agents]]
+- [[https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills][Anthropic: Agent Skills]]
+- 1000 Year Old Vampire (solo RPG, memory mechanics)
+- Brindlewood Bay (clue collapse mechanic)
+- Mythic GM Emulator (chaos factor)
+
+--------------
+
+/Last updated: 2025-12-06/
+/Status: Draft v3.3/
+
+--------------
+
+
+

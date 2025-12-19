@@ -1,0 +1,50 @@
+#+title: Part 12 Sub Agent Architecture
+
+** Part 12: Sub-Agent Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-12-sub-agent-architecture
+:END:
+*** Phase 1: Advisory (Report-Only)
+:PROPERTIES:
+:CUSTOM_ID: phase-1-advisory-report-only
+:END:
+#+begin_src elisp
+(spawn-advisor
+  :task "Check if imports in main.rs are used"
+  :model "gemini-flash-2.0"
+  :permissions :read-only
+  :context (minimal-context-for-task))
+
+;; Returns report, main agent decides whether to act
+#+end_src
+
+Sub-agents are /focused attention/, not parallel selves: - Manager is continuous thread of identity - Sub-agent gets task + minimal context - Sub-agent returns report and dissolves - Manager integrates result
+
+*** Phase 2+: Workers with Write Access
+:PROPERTIES:
+:CUSTOM_ID: phase-2-workers-with-write-access
+:END:
+#+begin_src elisp
+(spawn-worker
+  :thread "dependency-cleanup"
+  :model "gemini-flash-2.0"
+  :budget 0.05
+  :constraints (:can-modify ("src/main.rs" "Cargo.toml")
+                :cannot-spawn t
+                :must-complete-or-report t))
+#+end_src
+
+Worker receives: - Thread context from git history - Constrained permissions - Budget limit
+
+Worker commits with =[WORKER]= tag. Returns completion or blockage report.
+
+*** Phase 3: Branch Isolation
+:PROPERTIES:
+:CUSTOM_ID: phase-3-branch-isolation
+:END:
+Workers spawn in git worktrees on branches: - Prevents garbage from polluting main state - Clean rollback if worker produces garbage - Merge to main on success
+
+--------------
+
+
+

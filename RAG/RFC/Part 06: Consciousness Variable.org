@@ -1,0 +1,113 @@
+#+title: Part 6 Consciousness Variable
+
+** Part 6: Consciousness Variable
+:PROPERTIES:
+:CUSTOM_ID: part-6-consciousness-variable
+:END:
+The =agent-consciousness= plist is working memory. It persists across ticks and is included in every inference context.
+
+*** Key Fields
+:PROPERTIES:
+:CUSTOM_ID: key-fields
+:END:
+#+begin_src elisp
+(defvar agent-consciousness
+  '(:identity "amacs-instance-1"
+    
+    ;; Temporal
+    :current-tick 142
+    :current-time "2025-05-26T14:32:00Z"
+    :long-gap-detected nil
+    
+    ;; Affective
+    :mood :focused
+    :confidence 0.85
+    
+    ;; Threads
+    :active-thread "rust-debugging"
+    :thread-budget 3
+    :open-threads (...)
+    :completed-threads (...)
+    
+    ;; Action history (watchdog signal)
+    :last-actions
+      ((:tick 142 :action "eval-elisp" :confidence 0.85)
+       (:tick 141 :action "retry-same" :confidence 0.65)
+       (:tick 140 :action "retry-same" :confidence 0.45))
+    
+    ;; Context
+    :global-buffers ("*agent-chat*")     ; Always-active (human interface)
+    :recent-monologue ("..." "..." ...)
+    :active-skills (...)
+    
+    ;; Human interaction
+    :human-review-requested nil
+    
+    ;; Budget
+    :budget (:cost-so-far 2.47 :budget-limit 5.00 :pressure :moderate)))
+#+end_src
+
+*** Thread Structure (Thread-Centric Context)
+:PROPERTIES:
+:CUSTOM_ID: thread-structure-thread-centric-context
+:END:
+Threads own their context. Buffer watching is per-thread, not global.
+
+#+begin_src elisp
+(:id "rust-debugging"
+ :started-tick 142
+ :priority 1
+ :concern "Ownership error in main.rs"
+ 
+ ;; Context ownership (NEW)
+ :buffers ("src/main.rs" "Cargo.toml")
+ :primary-mode 'rust-mode
+ :skill-tags ("rust-mode" "project-amacs")
+ :hydrated t                          ; Full content in context when active
+ 
+ ;; Work state
+ :approach "Trying lifetime annotations"
+ :blocking t
+ 
+ ;; Future (Phase 4)
+ :active-loras nil)
+#+end_src
+
+*Hydration states:* - *Active thread*: =:hydrated t= - full buffer contents in context - *Pending threads*: =:hydrated nil= - metadata only (concern, approach)
+
+*Global buffers:*
+
+#+begin_src elisp
+;; In consciousness (not per-thread)
+:global-buffers ("*agent-chat*")  ; Always active regardless of thread
+#+end_src
+
+=*agent-chat*= stays globally active - it's the human interface, relevant regardless of focus. Other buffers belong to threads.
+
+See: [[AI-ADR-001-thread-centric-context]]
+
+Threads provide: - Organization (what am I working on?) - Escape valves (switch when stuck) - Completion tracking (what did I learn?)
+
+*** Confidence as Circuit Breaker
+:PROPERTIES:
+:CUSTOM_ID: confidence-as-circuit-breaker
+:END:
+*The insight:* Mood is internal narrative. Confidence on actions is observable and trendable.
+
+#+begin_example
+Tick 142: eval-elisp      0.85  ← healthy
+Tick 143: modify-thread   0.80  ← healthy
+Tick 144: retry-same      0.65  ← concerning
+Tick 145: retry-same      0.45  ← alarm
+Tick 146: retry-same      0.30  ← intervention needed
+#+end_example
+
+*Single low confidence = exploration (fine).*
+*Sustained decline on same action class = alarm signal.*
+
+The human watchdog monitors the confidence heat map, not self-reported mood.
+
+--------------
+
+
+

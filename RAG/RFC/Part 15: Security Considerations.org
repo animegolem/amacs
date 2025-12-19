@@ -1,0 +1,34 @@
+#+title: Part 15 Security Considerations
+
+** Part 15: Security Considerations
+:PROPERTIES:
+:CUSTOM_ID: part-15-security-considerations
+:END:
+*** Threat Model
+:PROPERTIES:
+:CUSTOM_ID: threat-model
+:END:
+The agent can do anything within its airgapped body. Security is: 1. *Containment:* Body cannot reach internet or local network 2. *Inspection:* All API calls route through brain, observable 3. *Rollback:* VM snapshots enable recovery from any state 4. *Watchdog:* Services restart if hung
+
+We are NOT trying to prevent the agent from “escaping” through clever prompting. We are ensuring that even total compromise of the body VM has bounded impact.
+
+*** The Spinal Cord Rule
+:PROPERTIES:
+:CUSTOM_ID: the-spinal-cord-rule
+:END:
+Agent cannot modify: - VSock plumbing (communication channels) - Core systemd services (cortex-listener, commit-hooks) - Consciousness serialization (must persist correctly) - The snapshot/rollback mechanism
+
+Everything else is fair game for experimentation.
+
+*** CI/CD Security (Phase 3)
+:PROPERTIES:
+:CUSTOM_ID: cicd-security-phase-3
+:END:
+When agent can push Containerfile changes: - Gitea runner builds in isolation - Network fetch requires explicit approval - Successful build triggers snapshot before deploy - Failed builds don't deploy
+
+Agent can request new tools. Human approves network access. Build happens offline.
+
+--------------
+
+
+

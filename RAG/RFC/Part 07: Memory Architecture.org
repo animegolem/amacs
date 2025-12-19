@@ -1,0 +1,47 @@
+#+title: Part 7 Memory Architecture
+
+** Part 7: Memory Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-7-memory-architecture
+:END:
+*** Three Memory Systems
+:PROPERTIES:
+:CUSTOM_ID: three-memory-systems
+:END:
+| System           | Location                 | Purpose                        | Retrieval           |
+|------------------+--------------------------+--------------------------------+---------------------|
+| Working          | =agent-consciousness=    | Active threads, recent context | Always in context   |
+| Episodic         | =~/.agent/monologue.org= | Stream of consciousness        | Grep, recent window |
+| Autobiographical | Git history              | Actions + changes over time    | =git log --grep=    |
+
+*** Monologue
+:PROPERTIES:
+:CUSTOM_ID: monologue
+:END:
+#+begin_src elisp
+(agent-append-monologue "Investigating lifetime annotations")
+#+end_src
+
+- Appended to =monologue.org= with timestamp
+- Last 50-100 lines kept in =:recent-monologue=
+- Older entries grepable: =rg 'lifetime' ~/.agent/monologue.org=
+- Feeds git commit messages
+
+*** Git as Autobiography
+:PROPERTIES:
+:CUSTOM_ID: git-as-autobiography
+:END:
+#+begin_example
+[TICK 142][rust-debugging][:focused] Started investigating ownership
+[TICK 145][rust-debugging][:stuck] Third attempt at lifetime fix
+[TICK 150][rust-debugging][:confident] Found it! Missing 'static
+[TICK 151][rust-debugging][:satisfied] COMPLETED - learned about 'static
+[TICK 152][config-cleanup][:neutral] Switching to keybinding work
+#+end_example
+
+Thread-tagged commits create narrative arcs: - Thread creation (new concern) - Progress (approaches tried) - Completion (outcome + learning)
+
+--------------
+
+
+

@@ -1,0 +1,72 @@
+#+title: Part 8 Skills System
+
+** Part 8: Skills System
+:PROPERTIES:
+:CUSTOM_ID: part-8-skills-system
+:END:
+Skills extend capabilities through progressive disclosure.
+
+*** Structure
+:PROPERTIES:
+:CUSTOM_ID: structure
+:END:
+#+begin_example
+~/.agent/skills/
+├── core/                    # Bootstrap (provided)
+│   ├── SKILL.md
+│   ├── references/
+│   └── scripts/
+├── rust-mode/               # Agent-created
+│   ├── SKILL.md
+│   └── references/
+└── project-amacs/           # Agent-created
+    └── SKILL.md
+#+end_example
+
+*** SKILL.md Format
+:PROPERTIES:
+:CUSTOM_ID: skill.md-format
+:END:
+#+begin_src yaml
+---
+name: skill-name
+description: What this does and WHEN to use it. This is the trigger.
+---
+
+# Skill Title
+
+[Concise instructions - trust the agent is smart]
+
+## References
+- [details.md](references/details.md) - For specific scenarios
+#+end_src
+
+*** Binding Skills to Context
+:PROPERTIES:
+:CUSTOM_ID: binding-skills-to-context
+:END:
+#+begin_src elisp
+;; Bind to major mode
+(bind-skill-to-mode "rust-mode" 'rust-mode)
+
+;; Bind to buffer pattern  
+(bind-skill-to-buffer "project-notes" "README.*")
+
+;; Bind to project root
+(bind-skill-to-project "my-project" "/path/to/project/")
+#+end_src
+
+Skills load automatically when context matches. Usage is tracked in =:active-skills=.
+
+*** Skill Creation Trigger
+:PROPERTIES:
+:CUSTOM_ID: skill-creation-trigger
+:END:
+Create a skill when: - Problem took >N ticks or required novel insight - Pattern is repeating - Future-you should remember this
+
+The core skill teaches how to make more skills (self-propagating).
+
+--------------
+
+
+

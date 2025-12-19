@@ -1,6 +1,6 @@
 ---
 node_id: AI-EPIC-001b
-tags: 
+tags:
   - EPIC
   - AI
   - phase-1.5
@@ -8,10 +8,10 @@ tags:
   - inference
   - derisk
 date_created: 2025-12-06
-date_completed: 
-kanban-status: planned
+date_completed: 2025-12-12
+kanban-status: completed
 AI_IMP_spawned:
-  - AI-IMP-011 (planned)
+  - AI-IMP-011 (completed)
 ---
 
 # AI-EPIC-001b-first-breath
@@ -58,15 +58,15 @@ Timeline: 1 session
 
 ### Functional Requirements
 
-- [ ] FR-1: System shall read API key from environment variable or config file
-- [ ] FR-2: System shall assemble prompt from thread context using `agent-build-context`
-- [ ] FR-3: System shall make HTTP POST to OpenAI-compatible endpoint
-- [ ] FR-4: System shall parse JSON response and extract assistant message
-- [ ] FR-5: System shall update `:last-inference-time` and increment tick
-- [ ] FR-6: System shall append LLM response summary to monologue
-- [ ] FR-7: System shall commit with LLM-influenced message
-- [ ] FR-8: System shall handle API errors gracefully (log, don't crash)
-- [ ] FR-9: System shall estimate token usage and update `:budget`
+- [x] FR-1: System shall read API key from environment variable or config file
+- [x] FR-2: System shall assemble prompt from thread context using `agent-build-context`
+- [x] FR-3: System shall make HTTP POST to OpenAI-compatible endpoint
+- [x] FR-4: System shall parse JSON response and extract assistant message
+- [x] FR-5: System shall update `:last-inference-time` and increment tick
+- [x] FR-6: System shall append LLM response summary to monologue
+- [x] FR-7: System shall commit with LLM-influenced message
+- [x] FR-8: System shall handle API errors gracefully (log, don't crash)
+- [x] FR-9: System shall estimate token usage and update `:budget`
 
 ### Non-Functional Requirements 
 

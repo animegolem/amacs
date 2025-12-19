@@ -1,0 +1,104 @@
+#+title: Part 5 The Tick System
+
+** Part 5: The Tick System
+:PROPERTIES:
+:CUSTOM_ID: part-5-the-tick-system
+:END:
+*** The Heartbeat
+:PROPERTIES:
+:CUSTOM_ID: the-heartbeat
+:END:
+Each tick follows: *perceive → infer → act → commit*
+
+#+begin_src elisp
+(defun brain-tick ()
+  (let* ((perception (body-perceive-geometry))  ; What do I see?
+         (context (build-context perception))    ; Assemble for LLM
+         (decision (llm-infer context))          ; What should I do?
+         (result (body-eval-action decision)))   ; Do it
+    (update-consciousness decision result)
+    (commit-monologue)))                         ; Remember it
+#+end_src
+
+Every tick ends with a git commit. The commit message is the agent's monologue line. Git history is autobiographical memory.
+
+*** Context Assembly (Thread-Centric)
+:PROPERTIES:
+:CUSTOM_ID: context-assembly-thread-centric
+:END:
+Context is built from active thread + global buffers. See [[AI-ADR-001-thread-centric-context]].
+
+#+begin_src elisp
+(defun build-context ()
+  "Build context from active thread + global buffers."
+  (let* ((active (agent-get-active-thread))
+         (pending (agent-get-pending-threads))
+         (global-bufs (agent-get :global-buffers)))
+    `(:system ,(agent-system-prompt)       ; Cached indefinitely
+      :consciousness ,(agent-consciousness-summary)  ; Cached ~5min
+      
+      ;; Active thread - fully hydrated
+      :active-thread
+        (:id ,(plist-get active :id)
+         :concern ,(plist-get active :concern)
+         :approach ,(plist-get active :approach)
+         :buffers ,(hydrate-buffers (plist-get active :buffers))
+         :skills ,(load-thread-skills active))
+      
+      ;; Pending threads - dehydrated (metadata only)
+      :pending-threads
+        ,(mapcar #'thread-summary pending)
+      
+      ;; Global buffers (chat interface)
+      :global ,(hydrate-buffers global-bufs)
+      
+      ;; Fresh each tick
+      :checkpoint ,(maybe-inject-checkpoint)
+      :intrusive-thoughts ,(maybe-inject-critic)
+      :trigger ,(describe-current-trigger))))
+#+end_src
+
+**** Token Budget
+:PROPERTIES:
+:CUSTOM_ID: token-budget
+:END:
+| Component                | Tokens | Notes                        |
+|--------------------------+--------+------------------------------|
+| System prompt            | 2k     | Cached indefinitely          |
+| Consciousness summary    | 4k     | Cached ~5min                 |
+| Active thread buffers    | 30k    | Only active thread's buffers |
+| Active thread skills     | 5k     | Skills bound to this thread  |
+| Pending thread summaries | 2k     | Metadata only, not content   |
+| Global buffers           | 5k     | =*agent-chat*= etc           |
+| Checkpoint/intrusive     | 2k     | Fresh each relevant tick     |
+| Trigger                  | 1k     | Always fresh                 |
+| *Reserved*               | 29k    | Headroom                     |
+
+*Target:* ~80k tokens. Thread switching changes what's hydrated, not total budget.
+
+*** Wake Logic
+:PROPERTIES:
+:CUSTOM_ID: wake-logic
+:END:
+Not every change triggers inference. A classifier determines wake-worthiness:
+
+#+begin_src elisp
+(defun wake-worthy-p (changes)
+  (and changes
+       (or (assoc "*agent-chat*" changes)  ; Always wake for chat
+           (debounced-change-p changes)))) ; 2sec debounce for buffers
+#+end_src
+
+**** Tick Rate Guidelines (Phase 1)
+:PROPERTIES:
+:CUSTOM_ID: tick-rate-guidelines-phase-1
+:END:
+- *Frequency:* Manual trigger
+- *Debounce:* 2-5 seconds
+- *Watched buffers:* 2-3 initially
+- *Log every wake decision* for analysis
+
+--------------
+
+
+

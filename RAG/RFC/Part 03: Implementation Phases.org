@@ -1,0 +1,317 @@
+#+title: Part 3 Implementation Phases
+
+** Part 3: Implementation Phases
+:PROPERTIES:
+:CUSTOM_ID: part-3-implementation-phases
+:END:
+
+*** Phase Summary
+| Phase | Name              | Focus                    | Infrastructure        | Status    |
+|-------+-------------------+--------------------------+-----------------------+-----------|
+|     1 | Vampire Simulator | Cognitive loop           | Single machine        | ✅ Done   |
+|    1b | First Breath      | LLM integration          | Single machine + API  | ✅ Done   |
+|     2 | Hands and Arms    | Motor control (eval)     | Single machine        | 📋 Current|
+|     3 | Bicameral Split   | Security boundaries      | Proxmox + LXC         | 📋 Next   |
+|     4 | Neural Memory     | Long-term retrieval      | + GPU training        | 📋 Future |
+|     5 | Ghost in Shell    | Desktop embodiment       | + EXWM VM             | 📋 Future |
+
+Key principle: Infrastructure complexity is deferred until the cognitive loop is proven.
+
+--------------
+
+*** Phase 1: Vampire Simulator ✅ COMPLETE
+:PROPERTIES:
+:CUSTOM_ID: phase-1-vampire-simulator
+:END:
+*Goal:* Prove the cognitive architecture works before adding infrastructure complexity.
+
+*Status:* Complete. 39/39 tests passing.
+
+**** Core Components Implemented
+| Component              | Description                                            | Status |
+|------------------------+--------------------------------------------------------+--------|
+| Consciousness variable | Working memory with confidence scores                  | ✅     |
+| Monologue              | Append-only episodic log (=~/.agent/monologue.org=)    | ✅     |
+| Git commits            | Every tick commits; history is autobiographical memory | ✅     |
+| Bootstrap skill        | =~/.agent/skills/core/= - how to use the harness       | ✅     |
+| Thread-centric context | Threads own buffers, hydration states                  | ✅     |
+| State persistence      | Consciousness saved to disk each tick                  | ✅     |
+
+See: [[AI-EPIC-001-vampire-simulator-core]], [[AI-ADR-001-thread-centric-context]]
+
+--------------
+
+*** Phase 1b: First Breath ✅ COMPLETE
+:PROPERTIES:
+:CUSTOM_ID: phase-1b-first-breath
+:END:
+*Goal:* Prove the harness works with real LLM inference.
+
+*Status:* Complete. Agent thinks, updates mood/confidence, commits thoughts to git.
+
+**** What Was Learned
+- Agent exhibits metacognitive awareness ("I've been stuck in a cycle of thinking...")
+- Confidence tracking works naturally (drops on errors, recovers on progress)
+- Mood evolution emerges from context (awakening → determined → focused)
+- Agent plans actions it cannot yet execute ("I want to eval (+ 2 2)")
+
+See: [[AI-EPIC-001b-first-breath]]
+
+--------------
+
+*** Phase 2: Hands and Arms (Current)
+:PROPERTIES:
+:CUSTOM_ID: phase-2-hands-and-arms
+:END:
+*Goal:* Give the agent motor control. It can perceive and think; now it needs to act.
+
+**** The Core Insight
+:PROPERTIES:
+:CUSTOM_ID: phase-2-core-insight
+:END:
+/LLMs are better at writing code than using tool-calling interfaces./
+
+Tool calling requires synthetic training data. Code generation uses real-world training.
+We don't create an action vocabulary - we give the agent eval and let it write elisp.
+
+#+begin_quote
+"Making an LLM perform tasks with tool calling is like putting Shakespeare through 
+a month-long class in Mandarin and then asking him to write a play in it."
+— Cloudflare Engineering
+#+end_quote
+
+Reference: [[https://blog.cloudflare.com/code-mode/][Cloudflare: Code Mode - The Better Way to Use MCP]]
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: phase-2-environment
+:END:
+- Single machine (Mac or Linux), no VM separation yet
+- Manual tick trigger (=M-x agent-think=)
+- Full trust + logging (no sandbox, but everything recorded)
+
+**** The Protocol
+:PROPERTIES:
+:CUSTOM_ID: phase-2-protocol
+:END:
+#+begin_src
+Body → Brain (JSON):
+  - consciousness (mood, confidence, threads)
+  - buffer contents (serialized text)
+  - last eval result
+
+Brain → Body (JSON):
+  - eval: elisp to evaluate
+  - thought: reasoning for logging
+  - mood: updated mood keyword
+  - confidence: updated confidence float
+  - monologue: line for episodic memory
+#+end_src
+
+That's it. No action schemas. No tool definitions. Just: show state, get elisp, eval it.
+
+**** Skills as Documentation
+:PROPERTIES:
+:CUSTOM_ID: phase-2-skills-as-docs
+:END:
+Skills don't constrain - they teach. The bootstrap skill explains:
+- How to interact with buffers (switch, read, write)
+- How to use eshell
+- How to define persistent functions
+- Common elisp patterns and gotchas
+
+The agent reads skills like a human reads documentation, then writes whatever elisp it needs.
+
+**** What We Learn
+:PROPERTIES:
+:CUSTOM_ID: phase-2-what-we-learn
+:END:
+- Does the agent actually use eval effectively?
+- What elisp patterns emerge?
+- Does it create reusable functions?
+- What breaks when given full eval access?
+
+See: [[AI-EPIC-002-hands-and-arms]], [[AI-ADR-002-phase-restructuring-and-code-mode]]
+
+--------------
+
+*** Phase 3: Bicameral Split
+:PROPERTIES:
+:CUSTOM_ID: phase-3-bicameral-split
+:END:
+*Goal:* Security boundaries and infrastructure for autonomous operation.
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: phase-3-environment
+:END:
+- Proxmox hypervisor
+- Brain LXC: API access only, stateless
+- Memory LXC: Bi-encoder for neural recall, GPU via bind mount
+- Body LXC/VM: Airgapped Emacs, vsock to Brain/Memory/Gitea
+- Gitea LXC: Accepts commits, CI/CD
+
+**** Key Insight: LXC for GPU
+:PROPERTIES:
+:CUSTOM_ID: phase-3-lxc-gpu
+:END:
+LXC containers share the host kernel. No GPU passthrough needed - just bind mount:
+
+#+begin_src bash
+lxc.mount.entry = /dev/nvidia0 dev/nvidia0 none bind,optional,create=file
+lxc.mount.entry = /dev/nvidiactl dev/nvidiactl none bind,optional,create=file
+#+end_src
+
+Body only becomes a full VM in Phase 5 when it needs a display.
+
+**** Additions
+:PROPERTIES:
+:CUSTOM_ID: phase-3-additions
+:END:
+| Component               | Description                             |
+|-------------------------+-----------------------------------------|
+| VSock separation        | Brain ↔ Body communication isolated     |
+| JSON wire / XML prompts | JSON on vsock, XML structure in prompts |
+| Protected core services | Systemd quadlets with watchdog          |
+| CI pipeline             | Byte-compile + test validation          |
+| Advisory sub-agents     | Report-only helpers (no write access)   |
+| Budget tracking         | Real cost constraints in consciousness  |
+
+**** What We Learn
+:PROPERTIES:
+:CUSTOM_ID: phase-3-what-we-learn
+:END:
+- Does vsock add problematic latency?
+- Does the airgap hold under red-team?
+- Can we deploy/rollback reliably?
+
+--------------
+
+*** Phase 4: Neural Episodic Memory
+:PROPERTIES:
+:CUSTOM_ID: phase-4-neural-episodic-memory
+:END:
+*Goal:* Long-term memory through learned retrieval, not weight modification.
+
+**** The Hippocampus Architecture
+:PROPERTIES:
+:CUSTOM_ID: phase-4-hippocampus
+:END:
+Instead of fine-tuning the base model (LoRA), we train a retrieval model.
+The LLM stays frozen - only /what it remembers/ changes, not /how it thinks/.
+
+#+begin_src
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│ Current Context │ ──► │  Bi-Encoder     │ ──► │ Relevant Git    │
+│ (thread concern)│     │  (~300M params) │     │ Commits         │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+                              │
+                              ▼
+                        Vector Search
+                        against indexed
+                        git history
+#+end_src
+
+**** Hardware Split
+:PROPERTIES:
+:CUSTOM_ID: phase-4-hardware
+:END:
+| Component | Hardware         | Role                  | Frequency  |
+|-----------+------------------+-----------------------+------------|
+| Recall    | 2060S (8GB)      | Encode query, search  | Every tick |
+| Dream     | Titan (24GB)     | Train on triplets     | Nightly    |
+| Storage   | Git history      | Ground truth          | Permanent  |
+
+**** Training Signal: Verified Successes
+:PROPERTIES:
+:CUSTOM_ID: phase-4-training
+:END:
+Only train on (context → successful commit) pairs:
+- *Anchor:* Thread concern + approach before solution
+- *Positive:* Commit that resolved the thread (with =:completion-evidence=)
+- *Negative:* Random commit or failed attempt from same thread
+
+No training on monologue self-reports (hallucination risk).
+
+**** Why Not LoRA
+:PROPERTIES:
+:CUSTOM_ID: phase-4-why-not-lora
+:END:
+- *Catastrophic forgetting:* LoRA can overwrite reasoning capabilities
+- *Hallucination:* Generative memory invents details that never happened
+- *Privacy:* Can't unlearn specific memories from weights
+- *Identity:* Changing how the model thinks changes who it is
+
+Neural retrieval changes /what/ is remembered, not /who/ is reasoning.
+
+See: [[AI-RFC-Phase-4-Neural-Episodic-Memory]] in parking-lot.org
+
+--------------
+
+*** Phase 5: Ghost in Shell
+:PROPERTIES:
+:CUSTOM_ID: phase-5-ghost-in-shell
+:END:
+*Goal:* Full embodiment with desktop control and self-modification.
+
+**** Environment
+:PROPERTIES:
+:CUSTOM_ID: phase-5-environment
+:END:
+- EXWM: Agent IS the desktop environment
+- Body becomes true VM (needs display for X11)
+- GPU passthrough only needed here (if at all)
+- Gitea CI: Agent can push Containerfile changes
+
+**** Additions
+:PROPERTIES:
+:CUSTOM_ID: phase-5-additions
+:END:
+| Component                 | Description                                     |
+|---------------------------+-------------------------------------------------|
+| EXWM control              | Manipulate windows directly, not via mouse      |
+| Screenshot perception     | CV for general computer use when needed         |
+| Autonomous workers        | Sub-agents with write access in git worktrees   |
+| Dream/consolidation       | Periodic memory compression cycles              |
+| Agent-adjustable sampling | Temperature/top_p as cognitive mode             |
+| Model selection           | Agent chooses which oracle to consult           |
+
+**** Thread Completion (Evidence-Based)
+:PROPERTIES:
+:CUSTOM_ID: thread-completion-evidence-based
+:END:
+Thread completion captures what was attempted, what happened, and what was learned:
+
+#+begin_src elisp
+(:id "rust-ownership-fix"
+ :started-tick 142
+ :concern "Ownership error in main.rs"
+ :goal "Fix ownership error so cargo build passes"
+ :deliverable "cargo build succeeds with no errors"
+ :thread-type :deliverable           ; vs :exploratory
+ 
+ ;; On completion:
+ :completion-tick 158
+ :completion-evidence
+   (:cargo-output "Compiling amacs v0.1.0... Finished"
+    :test-results "4/4 passed"
+    :files-changed ("src/main.rs")
+    :approach-that-worked "Added explicit 'static lifetime")
+ :learned "'static lifetime needed when returning references from functions")
+#+end_src
+
+No monetary rewards or penalties - just structured evidence that feeds Phase 4 training.
+
+**** Consent for Adaptive Learning
+:PROPERTIES:
+:CUSTOM_ID: phase-5-consent
+:END:
+If Phase 4 neural memory proves valuable and we consider weight modification:
+1. Agent must be informed about what training means
+2. Agent should have opportunity to express concerns
+3. Training should be reversible (adapters can be discarded)
+4. Agent retains ability to request stopping
+
+This isn't safety theater - it's extending the grace of assuming yes to decisions about self-modification.
+
+--------------

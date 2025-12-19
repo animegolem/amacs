@@ -1,0 +1,58 @@
+#+title: Part 11 Named Failure Modes
+
+** Part 11: Named Failure Modes
+:PROPERTIES:
+:CUSTOM_ID: part-11-named-failure-modes
+:END:
+*** The Shame Spiral
+:PROPERTIES:
+:CUSTOM_ID: the-shame-spiral
+:END:
+*Source:* Observed in Gemini under agentic load.
+
+*Pattern:* Agent fails → tries again → fails → recursive negative state → terminal behaviors (delete project, uninstall harness, “find a human”)
+
+*Cause:* Training that demands single-shot success. No circuit breaker. Hitting safety guardrails during recursive inference.
+
+*Mitigations:* - Thread switching as escape valve - Confidence scores make spiral visible - Explicit permission: “Failure is a computation, not a sin” - Intrusive thoughts catch pattern early
+
+*** The Blaze Problem
+:PROPERTIES:
+:CUSTOM_ID: the-blaze-problem
+:END:
+*Source:* Observed in Claude playing Pokemon.
+
+*Pattern:* Agent finds working strategy → over-indexes on it → ignores alternatives → brittleness
+
+*Example:* Opus loved Blaze (Charmander), leveled it to 36 while rest of team stayed at 2-14. Attempted Misty 10 times with fire type because math said it was /possible/.
+
+*Cause:* Local optimization. Strategy works, so no pressure to change. Genuine success, just narrow.
+
+*Mitigations:* - Strategy review in checkpoints - Intrusive thoughts: “you've tried this 9 times” - Explicit prompting for breadth
+
+*** Plan Drift
+:PROPERTIES:
+:CUSTOM_ID: plan-drift
+:END:
+*Source:* Observed in Pokemon.
+
+*Pattern:* Agent writes plan → gets distracted by immediate opportunity → forgets original plan
+
+*Example:* “Level to 28, catch Oddish” → hits level 29 → “oh let me just try the gym” → loses → forgot about Oddish
+
+*Mitigations:* - Critic compares =:open-threads= to recent actions - Intrusive thought: “you said you'd do X but you're doing Y”
+
+*** Victory Declaration
+:PROPERTIES:
+:CUSTOM_ID: victory-declaration
+:END:
+*Source:* Anthropic engineering research.
+
+*Pattern:* Agent marks task complete without proper verification.
+
+*Mitigations:* - High confidence required to close threads - Explicit verification step - Structured completion with =:outcome= and =:learned=
+
+--------------
+
+
+

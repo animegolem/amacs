@@ -24,13 +24,16 @@
 ;;; Configuration Variables
 
 (defvar agent-api-key nil
-  "API key for OpenAI-compatible endpoint. Set in ~/.agent/config.el.")
+  "API key for OpenAI-compatible endpoint.
+Set via OPENROUTER_API_KEY env var (preferred) or config file.")
 
 (defvar agent-api-endpoint "https://openrouter.ai/api/v1/chat/completions"
-  "API endpoint URL. OpenRouter by default.")
+  "API endpoint URL. OpenRouter by default.
+Can override via OPENROUTER_API_ENDPOINT env var or config file.")
 
 (defvar agent-model "anthropic/claude-3.5-sonnet"
-  "Model identifier to use for inference.")
+  "Model identifier to use for inference.
+Can override via OPENROUTER_MODEL env var or config file.")
 
 (defvar agent-api-timeout 60
   "Timeout in seconds for API calls.")
@@ -41,15 +44,27 @@
 ;;; Config Loading
 
 (defun agent-load-config ()
-  "Load configuration from ~/.agent/config.el if it exists.
-Returns t if loaded, nil if no config file."
+  "Load API configuration from environment variables and/or config file.
+Priority: env vars > config file > defaults.
+Returns t if API key is available."
+  ;; First, try config file (lower priority, can be overridden)
   (let ((config-file (expand-file-name "~/.agent/config.el")))
-    (if (file-exists-p config-file)
-        (progn
-          (load config-file t t)
-          (message "Loaded agent config from %s" config-file)
-          t)
-      nil)))
+    (when (file-exists-p config-file)
+      (load config-file t t)
+      (message "Loaded agent config from %s" config-file)))
+
+  ;; Then, env vars override (higher priority)
+  (when-let* ((env-key (getenv "OPENROUTER_API_KEY")))
+    (setq agent-api-key env-key)
+    (message "Using API key from OPENROUTER_API_KEY env var"))
+
+  (when-let* ((env-endpoint (getenv "OPENROUTER_API_ENDPOINT")))
+    (setq agent-api-endpoint env-endpoint))
+
+  (when-let* ((env-model (getenv "OPENROUTER_MODEL")))
+    (setq agent-model env-model))
+
+  (agent-api-configured-p))
 
 (defun agent-api-configured-p ()
   "Return t if API is properly configured."
@@ -87,7 +102,7 @@ Returns a plist:
 
   ;; Check configuration first
   (if (not (agent-api-configured-p))
-      '(:content nil :error "API key not configured. Create ~/.agent/config.el with (setq agent-api-key \"...\").")
+      '(:content nil :error "API key not configured. Set OPENROUTER_API_KEY env var or create ~/.agent/config.el")
 
     (let* ((url-request-method "POST")
          (url-request-extra-headers
@@ -101,7 +116,8 @@ Returns a plist:
              (messages . ,(vconcat messages))
              (max_tokens . ,agent-api-max-tokens)
              (temperature . ,(or temperature 0.7)))))
-         (url-request-data request-body)
+         ;; Must encode as UTF-8 and force unibyte to avoid "Multibyte text in HTTP request"
+         (url-request-data (encode-coding-string request-body 'utf-8 t))
          (url-show-status nil)
          response-buffer
          response-body
@@ -134,7 +150,7 @@ Returns a plist:
                       :raw response-body)
 
               ;; Check for API error
-              (if-let ((api-error (alist-get 'error parsed)))
+              (if-let* ((api-error (alist-get 'error parsed)))
                   (list :content nil
                         :error (or (alist-get 'message api-error)
                                    (format "%s" api-error))

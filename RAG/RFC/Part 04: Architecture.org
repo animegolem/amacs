@@ -1,0 +1,93 @@
+#+title: Part 4 Architecture
+
+** Part 4: Architecture
+:PROPERTIES:
+:CUSTOM_ID: part-4-architecture
+:END:
+*** System Topology
+:PROPERTIES:
+:CUSTOM_ID: system-topology
+:END:
+#+begin_example
+┌─────────────────┐                    ┌─────────────────┐
+│  Brain (VM)     │ ←─── vsock ─────→  │  Body (VM)      │
+│  - LLM API      │                    │  - Emacs/EXWM   │
+│  - Inference    │                    │  - eval-lisp    │
+│  - State mgmt   │                    │  - X11          │
+└────────┬────────┘                    └───────┬─────────┘
+         │                                     │
+         └──────────→ Gitea (VM) ←─────────────┘
+                      - Commits
+                      - CI/CD
+                      - History
+#+end_example
+
+*** Network Rules
+:PROPERTIES:
+:CUSTOM_ID: network-rules
+:END:
+**** Brain VM
+:PROPERTIES:
+:CUSTOM_ID: brain-vm
+:END:
+#+begin_example
+OUTPUT Policy: DROP
+ALLOW TCP 443 to LLM API domains
+ALLOW UDP 53 (DNS)
+DROP 192.168.x.x (local network)
+#+end_example
+
+**** Body VM
+:PROPERTIES:
+:CUSTOM_ID: body-vm
+:END:
+#+begin_example
+OUTPUT Policy: DROP
+ALLOW vsock to Brain (RPC ports only)
+ALLOW vsock to Gitea (git/ssh only)
+DROP all IP traffic
+#+end_example
+
+**** Gitea VM
+:PROPERTIES:
+:CUSTOM_ID: gitea-vm
+:END:
+#+begin_example
+ALLOW vsock from Brain and Body
+Optional: LAN access for human UI
+#+end_example
+
+*** The Eval Membrane
+:PROPERTIES:
+:CUSTOM_ID: the-eval-membrane
+:END:
+Security is architectural (airgap), not sandbox-based. Within the body VM, eval has full access.
+
+*Agent CAN modify:* - Skills, configs, monologue - Tick frequency, thread structure - Consciousness contents - Its own organizational patterns
+
+*Agent CANNOT modify:* - VSock plumbing - Core services (cortex-listener, git-commit-hook) - The eval membrane itself - Consciousness serialization hooks
+
+/“You can train, sleep, learn, journal. You cannot excise your own spinal cord.”/
+
+*** Protected Core Services
+:PROPERTIES:
+:CUSTOM_ID: protected-core-services
+:END:
+Systemd quadlets with watchdog:
+
+#+begin_src ini
+[Service]
+ExecStart=/usr/bin/emacs --daemon
+WatchdogSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+#+end_src
+
+If a service hangs >30sec, systemd kills and restarts. Agent can break Emacs freely; architecture ensures recovery.
+
+--------------
+
+
+

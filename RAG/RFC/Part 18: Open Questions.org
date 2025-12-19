@@ -1,0 +1,33 @@
+#+title: Part 18 Open Questions
+
+** Part 18: Open Questions
+:PROPERTIES:
+:CUSTOM_ID: part-18-open-questions
+:END:
+1. *Confidence source:* Self-reported or derived from action patterns?
+   - Start: Self-report
+   - Add derivation if gaming occurs
+2. *Critic model:* Gemini-flash? Haiku? Same as main?
+   - Start: Cheapest that produces useful output
+3. *Checkpoint frequency:* 100 ticks? 50? Adaptive?
+   - Start: 100
+   - Tune based on observation
+4. *Architecture transparency:* Should agent know it has a critic? Know about confidence watchdog?
+   - Lean: Yes, transparency > hidden surveillance
+5. *What breaks first?*
+   - Prediction: Consciousness gets cluttered, agent doesn't naturally prune
+   - Fallback: Add explicit pruning prompt
+6. *Thread completion verification:* How much evidence is enough?
+   - Start: Command outputs + test results for deliverables
+   - Adjust if completion quality becomes problematic
+7. *Exploratory vs deliverable balance:* Should there be soft nudges toward deliverables?
+   - Start: No limits, observe natural patterns
+   - Add guidance only if agent avoids commitment indefinitely
+8. *Phase 4 consent mechanics:* How do you meaningfully ask an LLM about training?
+   - Unknown. Worth exploring when we get there.
+   - At minimum: transparency about what training means, ability to express concerns
+
+--------------
+
+
+

@@ -19,6 +19,9 @@
 
 ;;; Code:
 
+;; Add harness directory to load-path so requires work
+(add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
+
 (require 'agent-consciousness)
 (require 'agent-monologue)
 (require 'agent-skills)

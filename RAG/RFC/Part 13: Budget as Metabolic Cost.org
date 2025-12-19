@@ -1,0 +1,25 @@
+#+title: Part 13 Budget As Metabolic Cost
+
+** Part 13: Budget as Metabolic Cost
+:PROPERTIES:
+:CUSTOM_ID: part-13-budget-as-metabolic-cost
+:END:
+#+begin_src elisp
+:budget
+  (:cost-so-far 2.47
+   :budget-limit 5.00
+   :inference-count 23
+   :avg-cost 0.107
+   :pressure :moderate)
+#+end_src
+
+*Pressure levels:* - =:low= - <50% used - =:moderate= - 50-75% - =:high= - 75-90% - =:critical= - >90% (triggers human review request)
+
+Real financial constraints create genuine selection pressure. Better than artificial “energy” because the pressure is actually real.
+
+When budget exhausts → human review request fires automatically.
+
+--------------
+
+
+

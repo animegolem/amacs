@@ -1,0 +1,63 @@
+#+title: Part 17 Deferred Idea
+
+** Part 17: Deferred Ideas
+:PROPERTIES:
+:CUSTOM_ID: part-17-deferred-ideas
+:END:
+These are potentially valuable but not needed for initial phases.
+
+*** Agent-Adjustable Sampling Parameters
+:PROPERTIES:
+:CUSTOM_ID: agent-adjustable-sampling-parameters
+:END:
+Let agent request temp/top_p changes for bounded periods:
+
+#+begin_src elisp
+:cognitive-mode
+  (:temperature 0.9
+   :adjusted-at-tick 145
+   :revert-at-tick 155
+   :reason "stuck, trying divergent approach")
+#+end_src
+
+Time-gated with API-side cap. Like Mythic chaos factor.
+
+*Defer until:* Evidence agent gets stuck in basins that temperature would help.
+
+*** Dream Urgency Accumulator
+:PROPERTIES:
+:CUSTOM_ID: dream-urgency-accumulator
+:END:
+Multi-signal integration for consolidation timing:
+
+#+begin_src elisp
+(defun agent-bump-dream-urgency (&key commits threads monologue-growth gap-seconds)
+  (incf agent-dream-urgency
+        (+ (* 0.001 commits)
+           (* 0.20 threads)
+           (* 0.0005 monologue-growth)
+           (if (> gap-seconds 3600) 0.5 0.0))))
+#+end_src
+
+*Defer until:* Simple “every N ticks” proves insufficient.
+
+*** Model Selection as Agent Choice
+:PROPERTIES:
+:CUSTOM_ID: model-selection-as-agent-choice
+:END:
+Agent decides which oracle (Claude/GPT/Gemini) based on task.
+
+*Defer until:* Evidence different models are better for different tasks.
+
+*** Full Worker Branch Isolation
+:PROPERTIES:
+:CUSTOM_ID: full-worker-branch-isolation
+:END:
+Git worktrees per worker, merge on success.
+
+*Defer until:* Workers actually cause problems isolation would solve.
+
+--------------
+
+
+

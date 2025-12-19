@@ -1,0 +1,147 @@
+#+title: Parking Log
+
+* Approved but not added to RFC
+** RFC: Phase 4 - Neural Episodic Memory (The Hippocampus Architecture)
+:PROPERTIES:
+:CUSTOM_ID: rfc-phase-4-neural-episodic-memory
+:AUTHOR: AMACs Architect
+:STATUS: Draft
+:DATE: 2025-12-14
+:TARGET: Phase 4 (Adaptive Learning)
+:END:
+
+*** 1. Context and Motivation
+The original Phase 4 proposal suggested fine-tuning the base model (LoRA) on successful tasks.
+This presents three critical risks:
+1.  *Catastrophic Forgetting:* New weights might overwrite core reasoning capabilities.
+2.  *Hallucination:* A generative memory can invent details that never happened.
+3.  *Privacy/Unlearning:* Removing a specific memory from weights is mathematically difficult.
+
+**Proposal:**
+Instead of modifying the *Prefrontal Cortex* (Reasoning/SOTA API), we build a *Hippocampus* (Neural Index).
+We will train a local, mid-sized embedding model (Bi-Encoder) to map current *context* to relevant historical *git commits*.
+
+This decouples **Recall** (Local) from **Reasoning** (API).
+
+*** 2. Architecture: The Bi-Encoder System
+We utilize a Contrastive Retrieval approach. The system does not generate text; it generates vectors that point to immutable git history.
+
+**** 2.1 The Model
+- **Base:** ~300M parameter SOTA Embedding Model (e.g., =bge-large-en-v1.5= or =nomic-embed-text=).
+- **Function:** Maps text to a 1024d vector space.
+- **VRAM Footprint:** ~0.8 GB (FP16). Trivial for the host GPU.
+
+**** 2.2 The Hardware Split
+| Component   | Hardware                  | Role                                     | Frequency   |
+|-------------+---------------------------+------------------------------------------|-------------|
+| **Recall**  | Proxmox Host (RTX 2060S)  | Inference. Encodes query, searches index.| Every Tick  |
+| **Dream**   | Compute Node (RTX Titan)  | Training. Contrastive loss on triplets.  | Nightly     |
+| **Storage** | Git Log (Disk)            | The "Ground Truth" text content.         | Permanent   |
+
+*** 3. Data Topology: Verified Success Triplets
+We solve "Garbage In, Garbage Out" by only training on verified successes.
+
+The training data consists of triplets $(A, P, N)$:
+
+1.  **Anchor (A):** The agent's context state *before* a solution was found.
+    - Fields: =:concern=, =:last-error=, =:approach=
+    - Example: "Rust ownership error in generic struct, tried lifetime 'a"
+2.  **Positive (P):** The Git Commit Message + Diff that *resolved* the thread.
+    - Source: Threads marked =:completion-evidence= with success.
+    - Example: "Added PhantomData to struct. Fixes borrow checker."
+3.  **Negative (N):** A random commit or a failed attempt from the same thread.
+
+**Objective:** Minimize distance $d(A, P)$ and maximize $d(A, N)$ in vector space.
+
+*** 4. Implementation Details
+
+**** 4.1 The Interface (Elisp)
+The Body VM needs a new sense: =neural-recall=.
+
+#+begin_src elisp
+(defun agent-neural-recall (context-summary)
+  "Query the local embedding service for relevant history."
+  (let* ((query-vec (rpc-call-embedding-service :encode context-summary))
+         ;; Dot product search against cached git-log-vectors
+         (hits (vector-search :query query-vec :top-k 3 :threshold 0.75)))
+    (mapcar #'git-show-commit-content hits)))
+
+(defun build-phase-4-context ()
+  ;; Existing context construction...
+  (let ((memories (agent-neural-recall (plist-get active-thread :concern))))
+    `(:system ,system-prompt
+      ;; INJECTION POINT
+      :neural-memory
+        ,(format "<RECALLED_HISTORY>\n%s\n</RECALLED_HISTORY>"
+                 (mapconcat #'identity memories "\n---\n"))
+      :active-thread ,active-thread)))
+#+end_src
+
+**** 4.2 The Dream Cycle (Python/PyTorch)
+Running on the RTX Titan (Nightly).
+
+#+begin_src python
+class MemoryTrainer:
+    def dream(self):
+        """
+        1. Parse ~/.agent/monologue.org for completed threads.
+        2. Extract (Context, CommitID) pairs.
+        3. Generate Hard Negatives (commits that look similar but failed).
+        4. Fine-tune Bi-Encoder using InfoNCE Loss.
+        5. Re-index all Git Commits with new weights.
+        """
+        triplets = self.extract_verified_successes()
+        
+        # Large batch size crucial for contrastive learning
+        dataloader = DataLoader(triplets, batch_size=128, shuffle=True)
+        
+        # Training loop (RTX Titan)
+        for batch in dataloader:
+            loss = contrastive_loss(model, batch)
+            loss.backward()
+            
+        # Save adapter/weights to shared storage for 2060S to load
+        self.save_weights("/mnt/shared/agent/memory_model.pt")
+#+end_src
+
+*** 5. Failure Modes and Mitigations
+
+**** 5.1 The "Stale Index" Problem
+*Risk:* The model is updated nightly, but the agent solves a problem at 10 AM and encounters it again at 11 AM.
+*Mitigation:* The "Working Memory" (context window) handles short-term recall. This system is for *Episodic* recall (days/weeks). We accept <24h latency on long-term memory consolidation.
+
+**** 5.2 The "Echo Chamber" (Over-fitting)
+*Risk:* Agent learns only one way to solve a problem (e.g., always wrap in =Arc<Mutex>=).
+*Mitigation:* **Entropy Regularization**. During retrieval, if Top-1 and Top-2 are identical (duplicate commits), force retrieval of a diverse Top-3.
+
+**** 5.3 Privacy/Unlearning
+*Scenario:* User accidentally commits API key or sensitive data, then reverts it.
+*Protocol:*
+1.  Git Revert the commit (Source of truth cleansed).
+2.  Trigger immediate "Nightmare Cycle" (Retrain model).
+3.  Since the commit ID no longer exists in the valid index, the Neural Net points to null.
+4.  Safe.
+
+*** 6. Hardware Feasibility Analysis
+
+| Task | Resource | Requirement | Available (2060S) | Status |
+|------+----------+-------------+-------------------|--------|
+| **Inference** | VRAM | ~0.8 GB | 8 GB | **GREEN** |
+| **Inference** | Latency | < 100ms | - | **GREEN** |
+
+| Task | Resource | Requirement | Available (Titan) | Status |
+|------+----------+-------------+-------------------|--------|
+| **Training** | VRAM | > 16 GB | 24 GB | **GREEN** |
+| **Training** | Batch Size | > 64 | Supports ~256+ | **GREEN** |
+
+*** 7. Deployment Plan
+1.  **Dockerize** the Embedding Service (FastAPI + SentenceTransformers).
+2.  **Deploy** to Proxmox Host (Port 8090, accessible via vsock tunnel).
+3.  **Update** Elisp harness to query Port 8090 on tick.
+4.  **Dry Run:** Log what the memory *would* have retrieved without injecting it.
+5.  **Live:** Inject into context when confidence > 0.8.
+
+
+
+
+* Exploratory Ideas

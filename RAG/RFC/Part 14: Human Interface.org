@@ -1,0 +1,43 @@
+#+title: Part 14 Human Interface
+
+** Part 14: Human Interface
+:PROPERTIES:
+:CUSTOM_ID: part-14-human-interface
+:END:
+*** Review Request
+:PROPERTIES:
+:CUSTOM_ID: review-request
+:END:
+Agent can explicitly signal need for attention:
+
+#+begin_src elisp
+(agent-request-human-review "Confidence declining but can't identify cause")
+#+end_src
+
+Sets:
+
+#+begin_src elisp
+:human-review-requested
+  (:requested t
+   :reason "Confidence declining but can't identify cause"
+   :requested-at-tick 156)
+#+end_src
+
+Triggers notification (email, webhook). Different from error state - a “please look at me” signal.
+
+*** Intervention Philosophy
+:PROPERTIES:
+:CUSTOM_ID: intervention-philosophy
+:END:
+*Phase 1:* Watchful parent. Present, observing, letting the system learn.
+
+*Later phases:* On-call emergency. Intervene for infrastructure, not cognition.
+
+*Intervention types:* - *Negotiated:* Chat conversation, discuss the issue - *Medical:* Direct state modification when system is inoperable - *Infrastructure:* Budget reset, service restart, VM snapshot rollback
+
+Most interventions should be negotiated. Medical interventions are last resort.
+
+--------------
+
+
+

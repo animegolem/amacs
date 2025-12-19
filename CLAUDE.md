@@ -71,6 +71,8 @@ Will perform:
 2. **Avoid backquote for mutable plists** - backquote shares cons cells. Use explicit `(list ...)` for plists you'll modify with `plist-put`.
 3. **`git rev-parse HEAD` on empty repos** - check return code, not output (errors go to stdout).
 4. **`parse-iso8601-time-string`** - fails silently in some Emacs versions. Wrap with fallback.
+5. **`url.el` multibyte error** - when POSTing JSON with `url-request-data`, encode as UTF-8: `(encode-coding-string body 'utf-8 t)` (the `t` forces unibyte)
+6. **`when-let`/`if-let` deprecated in Emacs 31** - use `when-let*`/`if-let*` instead. The `*` variants bind sequentially (like `let*`), which is usually what you want anyway.
 
 ## Key Files to Read
 
@@ -93,3 +95,19 @@ The agent runs in `~/.agent/` which contains:
 - `.git/` - Autobiographical memory (every tick commits)
 
 Tests recreate this directory fresh.
+
+## API Configuration
+
+Set environment variables (preferred):
+```bash
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export OPENROUTER_MODEL="anthropic/claude-3.5-sonnet"  # optional
+```
+
+Or create `~/.agent/config.el` (survives if you don't run tests):
+```elisp
+(setq agent-api-key "sk-or-v1-...")
+(setq agent-model "anthropic/claude-3-haiku")  ; optional, cheaper for testing
+```
+
+Priority: env vars > config file > defaults.

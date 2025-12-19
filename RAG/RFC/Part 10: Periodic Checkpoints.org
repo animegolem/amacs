@@ -1,0 +1,44 @@
+#+title:  Part 10 Periodic Checkpoints
+
+** Part 10: Periodic Checkpoints
+:PROPERTIES:
+:CUSTOM_ID: part-10-periodic-checkpoints
+:END:
+Every N ticks (start with 100), inject reflection opportunity:
+
+#+begin_example
+PERIODIC REFLECTION CHECKPOINT
+
+<THREAD_REVIEW>
+- Are your open threads still relevant?
+- Should any be completed/merged/archived?
+- Is your consciousness getting bloated?
+</THREAD_REVIEW>
+
+<CONSOLIDATION_CHECK>
+- Are any threads secretly the same problem?
+- Has progress on one revealed another is upstream/downstream?
+- What have you learned about which concerns are truly separate?
+</CONSOLIDATION_CHECK>
+
+<STRATEGY_REVIEW>
+- What approach are you currently using?
+- How many times have you used this approach recently?
+- What alternatives exist that you haven't tried?
+- Are you developing breadth or just depth?
+</STRATEGY_REVIEW>
+
+<INTRUSIVE_THOUGHTS source="external-critic">
+[injected from critic model]
+</INTRUSIVE_THOUGHTS>
+
+If adjustments needed: update consciousness and explain in monologue.
+If everything is coherent: continue with current action.
+#+end_example
+
+Agent can continue silently if everything's fine. The checkpoint provides opportunity, not command.
+
+--------------
+
+
+

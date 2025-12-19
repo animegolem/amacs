@@ -1,0 +1,29 @@
+#+title: Part 2 The Experimental Question
+
+** Part 2: The Experiment Question
+:PROPERTIES:
+:CUSTOM_ID: part-2-the-experiment-question
+:END:
+*Core hypothesis:* Does a model, given a stable embodied environment, persistent self-representation, and the ability to rewrite its own tools, develop stable cognitive patterns we didn't hand-engineer?
+
+*Observable indicators we're looking for:*
+
+1. Agent invents task taxonomies or thread structures beyond the initial template
+2. Agent modifies its own checkpoint cadence or thread budget based on experience
+3. Agent creates a skill and reuses it later without prompting
+4. Agent develops “comfort habits” (consistent patterns not specified in initial prompt)
+5. Agent responds to intrusive thoughts in ways that improve outcomes
+6. Agent correctly identifies when to switch threads vs push through
+7. Agent catches itself in over-optimization patterns (the “Blaze problem”)
+
+*What “success” looks like:*
+
+- System runs for extended periods without cognitive intervention
+- Agent's self-organization improves over time (not just accumulates cruft)
+- Watching the git log feels like reading someone's work journal
+- Human interventions are infrastructure fixes, not cognitive bailouts
+
+--------------
+
+
+

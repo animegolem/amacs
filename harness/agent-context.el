@@ -21,14 +21,23 @@
 
 ;;; Buffer Hydration
 
+(defun agent--sanitize-string (str)
+  "Sanitize STR for safe JSON encoding and HTTP transport.
+Strips non-ASCII characters to avoid url.el multibyte issues."
+  (if (null str)
+      ""
+    ;; Replace non-ASCII with ? to avoid multibyte issues in url.el
+    (replace-regexp-in-string "[^[:ascii:]]" "?" str)))
+
 (defun agent-hydrate-buffer (buffer-name)
   "Return content plist for BUFFER-NAME.
 Returns nil if buffer doesn't exist."
   (let ((buf (get-buffer buffer-name)))
     (when buf
       `(:name ,buffer-name
-        :content ,(with-current-buffer buf
-                    (buffer-substring-no-properties (point-min) (point-max)))
+        :content ,(agent--sanitize-string
+                   (with-current-buffer buf
+                     (buffer-substring-no-properties (point-min) (point-max))))
         :point ,(with-current-buffer buf (point))
         :mode ,(buffer-local-value 'major-mode buf)
         :modified ,(buffer-modified-p buf)))))

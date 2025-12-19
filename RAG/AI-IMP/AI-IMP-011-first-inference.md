@@ -6,13 +6,13 @@ tags:
   - phase-1.5
   - api
   - inference
-kanban_status: planned
+kanban_status: completed
 depends_on:
   - AI-IMP-001
   - AI-IMP-004
-confidence_score: 0.85
+confidence_score: 0.95
 created_date: 2025-12-06
-close_date: 
+close_date: 2025-12-12
 --- 
 
 # AI-IMP-011-first-inference
@@ -86,35 +86,37 @@ harness/.gitignore            # Ensure config.el patterns ignored
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Create `agent-api.el`:
-  - [ ] `agent-api-call` - Generic OpenAI-compatible POST
-  - [ ] Handle auth header from `agent-api-key`
-  - [ ] Parse JSON response
-  - [ ] Extract message content
-  - [ ] Return `(:content ... :usage ... :error ...)`
-  - [ ] Timeout handling (60s)
-  - [ ] Error handling (non-200, parse failure, timeout)
-- [ ] Create `agent-inference.el`:
-  - [ ] `agent-build-system-prompt` - AMACS identity + current state
-  - [ ] `agent-build-user-prompt` - Thread context + buffers + monologue
-  - [ ] `agent-format-messages` - Convert to OpenAI messages array
-  - [ ] `agent-think` - Main entry point, interactive command
-  - [ ] `agent-process-response` - Update consciousness from response
-  - [ ] `agent-extract-mood` - Optional: parse mood from response
-- [ ] Create config loading:
-  - [ ] Load `~/.agent/config.el` if exists
-  - [ ] Validate required vars set
-  - [ ] Clear error if API key missing
-- [ ] Modify `agent-core.el`:
-  - [ ] Require new modules
-  - [ ] Load config on init
-- [ ] Update `.gitignore`:
-  - [ ] Ensure `config.el` and `*-key*` patterns excluded
-- [ ] Test: API call with valid key returns response
-- [ ] Test: Response references thread concern (manual verification)
-- [ ] Test: Monologue contains response content
-- [ ] Test: Git commit includes inference result
-- [ ] Test: Missing API key gives clear error
+- [x] Create `agent-api.el`:
+  - [x] `agent-api-call` - Generic OpenAI-compatible POST
+  - [x] Handle auth header from `agent-api-key`
+  - [x] Parse JSON response
+  - [x] Extract message content
+  - [x] Return `(:content ... :usage ... :error ...)`
+  - [x] Timeout handling (60s)
+  - [x] Error handling (non-200, parse failure, timeout)
+- [x] Create `agent-inference.el`:
+  - [x] `agent-build-system-prompt` - AMACS identity + current state
+  - [x] `agent-build-user-prompt` - Thread context + buffers + monologue
+  - [x] `agent-format-messages` - Convert to OpenAI messages array
+  - [x] `agent-think` - Main entry point, interactive command
+  - [x] `agent-process-response` - Update consciousness from response
+  - [x] `agent-extract-mood` - Optional: parse mood from response
+- [x] Create config loading:
+  - [x] Load `~/.agent/config.el` if exists
+  - [x] Validate required vars set
+  - [x] Clear error if API key missing
+  - [x] Support `OPENROUTER_API_KEY` env var (preferred over config file)
+- [x] Modify `agent-core.el`:
+  - [x] Require new modules
+  - [x] Load config on init
+  - [x] Add load-path setup for standalone loading
+- [x] Update `.gitignore`:
+  - [x] Ensure `config.el` and `*-key*` patterns excluded
+- [x] Test: API call with valid key returns response
+- [x] Test: Response references thread concern (manual verification)
+- [x] Test: Monologue contains response content
+- [x] Test: Git commit includes inference result
+- [x] Test: Missing API key gives clear error
  
 ### Acceptance Criteria
 
@@ -168,6 +170,21 @@ You are reflecting on your current work. Consider:
 Respond with your current thought. Be concise but genuine.
 ```
 
-### Issues Encountered 
+### Issues Encountered
 
-<!-- Fill during implementation -->
+**1. url.el Multibyte Text Error**
+Initial implementation failed with "Multibyte text in HTTP request" when buffer content contained non-ASCII characters (fancy quotes from scratch buffer). Fix required two parts:
+- Encode request body with `(encode-coding-string body 'utf-8 t)` - the `t` forces unibyte output
+- Sanitize buffer content in `agent-hydrate-buffer` to strip non-ASCII: `(replace-regexp-in-string "[^[:ascii:]]" "?" str)`
+
+**2. Load Path Not Set**
+Running `emacs -Q -l agent-core.el` failed because sibling modules weren't on load-path. Fixed by adding to agent-core.el:
+```elisp
+(add-to-list 'load-path (file-name-directory (or load-file-name buffer-file-name)))
+```
+
+**3. Emacs 31 Deprecations**
+`when-let` and `if-let` deprecated in favor of `when-let*` and `if-let*`. Updated all instances.
+
+**4. Config File vs Environment Variables**
+Original design used `~/.agent/config.el` but test harness clears `~/.agent/` directory. Changed to prefer `OPENROUTER_API_KEY` environment variable with config file as fallback.
