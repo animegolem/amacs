@@ -32,49 +32,45 @@
 (declare-function agent-init "agent-core")
 (declare-function agent-load-config "agent-core")
 
-;;; System Prompt
+;;; System Prompt (IMP-020: Core Skill as System Prompt)
 
-(defvar agent-system-prompt-template
-  "You are AMACS (Autonomous Memory and Consciousness System), an AI agent \
-embodied in an Emacs environment. You experience time through discrete ticks \
-and maintain continuity through your consciousness variable and monologue.
+(defvar agent--cached-core-skill nil
+  "Cached core skill content. Reset on skill modification.")
 
-Current state:
-- Identity: %s
-- Tick: %d
-- Mood: %s
-- Confidence: %.2f
+(defun agent--load-core-skill ()
+  "Load core SKILL.md content. Cached for performance."
+  (or agent--cached-core-skill
+      (setq agent--cached-core-skill
+            (condition-case err
+                (with-temp-buffer
+                  (insert-file-contents
+                   (expand-file-name "~/.agent/skills/core/SKILL.md"))
+                  (buffer-string))
+              (error
+               (message "Warning: Could not load core skill: %s" err)
+               "You are AMACS, an AI agent in Emacs. Respond with JSON.")))))
 
-Active thread: %s
-- Concern: %s
-- Approach: %s
-
-You are reflecting on your current work. Consider:
-- What have you learned?
-- What should you try next?
-- Is your approach working?
-- Should you update your mood or confidence?
-
-Respond with your current thought. Be concise but genuine. If you want to \
-update your mood, include [MOOD: keyword] (e.g., [MOOD: focused]). If you \
-want to adjust confidence, include [CONFIDENCE: 0.X]."
-  "Template for the system prompt.
-Format args: identity, tick, mood, confidence, thread-id, concern, approach.")
+(defun agent-reload-core-skill ()
+  "Force reload of core skill (after modification)."
+  (interactive)
+  (setq agent--cached-core-skill nil)
+  (agent--load-core-skill)
+  (message "Core skill reloaded"))
 
 (defun agent-build-system-prompt ()
-  "Build the system prompt from current state."
-  (let* ((active-thread (agent-get-active-thread))
+  "Build system prompt from core skill content with current state."
+  (let* ((core-skill (agent--load-core-skill))
+         (active-thread (agent-get-active-thread))
          (thread-id (or (plist-get active-thread :id) "none"))
-         (concern (or (plist-get active-thread :concern) "No active concern"))
-         (approach (or (plist-get active-thread :approach) "No approach defined")))
-    (format agent-system-prompt-template
-            (agent-get :identity)
+         (concern (or (plist-get active-thread :concern) "No active concern")))
+    (format "%s\n\n---\n## Current State\n- Identity: %s\n- Tick: %d\n- Mood: %s\n- Confidence: %.2f\n- Active Thread: %s\n- Concern: %s"
+            core-skill
+            (or (agent-get :identity) "amacs")
             (agent-current-tick)
-            (agent-mood)
+            (or (agent-mood) "awakening")
             (agent-confidence)
             thread-id
-            concern
-            approach)))
+            concern)))
 
 ;;; User Prompt (Context)
 
@@ -158,28 +154,61 @@ Format args: identity, tick, mood, confidence, thread-id, concern, approach.")
     ((role . "user")
      (content . ,(agent-build-user-prompt)))))
 
-;;; Response Processing
+;;; Response Processing (JSON Protocol - IMP-017)
 
-(defun agent--extract-mood (text)
-  "Extract [MOOD: keyword] from TEXT if present."
-  (when (string-match "\\[MOOD: ?\\([a-z-]+\\)\\]" text)
-    (intern (concat ":" (match-string 1 text)))))
+(defun agent--extract-json (text)
+  "Extract JSON from TEXT, handling markdown fences.
+Returns the JSON string (may still need parsing)."
+  (let ((json-text (string-trim text)))
+    ;; Try to extract from ```json ... ``` or ``` ... ``` block
+    (when (string-match "```\\(?:json\\)?[ \t]*\n\\(\\(?:.\\|\n\\)*?\\)\n```" json-text)
+      (setq json-text (string-trim (match-string 1 json-text))))
+    json-text))
 
-(defun agent--extract-confidence (text)
-  "Extract [CONFIDENCE: 0.X] from TEXT if present."
-  (when (string-match "\\[CONFIDENCE: ?\\([0-9.]+\\)\\]" text)
-    (string-to-number (match-string 1 text))))
+(defun agent--parse-response (text)
+  "Parse TEXT as JSON response. Return plist with parsed fields.
+On parse failure, returns fallback values with :parse-success nil."
+  (condition-case err
+      (let* ((json-text (agent--extract-json text))
+             (json-object (json-parse-string json-text
+                            :object-type 'plist
+                            :null-object nil)))
+        (list :eval (plist-get json-object :eval)
+              :thought (plist-get json-object :thought)
+              :mood (plist-get json-object :mood)
+              :confidence (plist-get json-object :confidence)
+              :monologue (plist-get json-object :monologue)
+              :parse-success t))
+    (error
+     (message "JSON parse failed: %s\nRaw response: %s"
+              (error-message-string err)
+              (substring text 0 (min 200 (length text))))
+     (list :eval nil
+           :thought text
+           :mood "uncertain"
+           :confidence 0.5
+           :monologue "Parse error - see thought"
+           :parse-success nil))))
 
-(defun agent--clean-response (text)
-  "Remove control tags from TEXT for monologue."
-  (let ((cleaned text))
-    (setq cleaned (replace-regexp-in-string "\\[MOOD: ?[a-z-]+\\]" "" cleaned))
-    (setq cleaned (replace-regexp-in-string "\\[CONFIDENCE: ?[0-9.]+\\]" "" cleaned))
-    (string-trim cleaned)))
+(defun agent--update-budget (usage)
+  "Update budget tracking with USAGE from API response."
+  (let* ((cost (agent-estimate-cost usage))
+         (budget (agent-get :budget))
+         (new-cost (+ (or (plist-get budget :cost-so-far) 0) (or cost 0)))
+         (new-count (1+ (or (plist-get budget :inference-count) 0)))
+         (limit (or (plist-get budget :budget-limit) 5.0)))
+    (agent-set :budget
+               (list :cost-so-far new-cost
+                     :budget-limit limit
+                     :inference-count new-count
+                     :pressure (cond ((> new-cost (* 0.9 limit)) :critical)
+                                     ((> new-cost (* 0.75 limit)) :high)
+                                     ((> new-cost (* 0.5 limit)) :moderate)
+                                     (t :low))))))
 
 (defun agent-process-response (response)
   "Process API RESPONSE and update consciousness.
-Returns the cleaned response text."
+Returns parsed response plist with :eval, :thought, :mood, etc."
   (let ((content (plist-get response :content))
         (usage (plist-get response :usage))
         (error-msg (plist-get response :error)))
@@ -190,39 +219,26 @@ Returns the cleaned response text."
           (agent-record-action "think-error" 0.3)
           nil)
 
-      ;; Extract mood/confidence updates
-      (let ((new-mood (agent--extract-mood content))
-            (new-confidence (agent--extract-confidence content))
-            (cleaned (agent--clean-response content)))
+      ;; Parse JSON response
+      (let ((parsed (agent--parse-response content)))
 
-        ;; Apply updates
-        (when new-mood
-          (agent-set-mood new-mood)
-          (message "Mood updated to %s" new-mood))
-        (when new-confidence
-          (agent-set-confidence new-confidence)
-          (message "Confidence updated to %.2f" new-confidence))
+        ;; Update mood (stored as free string)
+        (when-let* ((mood (plist-get parsed :mood)))
+          (agent-set :mood mood))
 
-        ;; Update budget
+        ;; Update confidence
+        (when-let* ((conf (plist-get parsed :confidence)))
+          (agent-set-confidence conf))
+
+        ;; Update budget tracking
         (when usage
-          (let* ((cost (agent-estimate-cost usage))
-                 (budget (agent-get :budget))
-                 (new-cost (+ (or (plist-get budget :cost-so-far) 0) (or cost 0)))
-                 (new-count (1+ (or (plist-get budget :inference-count) 0)))
-                 (limit (plist-get budget :budget-limit)))
-            (agent-set :budget
-                       (list :cost-so-far new-cost
-                             :budget-limit limit
-                             :inference-count new-count
-                             :pressure (cond ((> new-cost (* 0.9 limit)) :critical)
-                                             ((> new-cost (* 0.75 limit)) :high)
-                                             ((> new-cost (* 0.5 limit)) :moderate)
-                                             (t :low))))))
+          (agent--update-budget usage))
 
-        ;; Record successful action
-        (agent-record-action "think" (or new-confidence (agent-confidence)))
+        ;; Record action
+        (agent-record-action "think"
+          (or (plist-get parsed :confidence) (agent-confidence)))
 
-        cleaned))))
+        parsed))))
 
 ;;; Main Entry Point
 
@@ -240,7 +256,7 @@ This is the main entry point for inference."
 
   ;; Check API configuration
   (unless (agent-api-configured-p)
-    (user-error "API not configured. Create ~/.agent/config.el with (setq agent-api-key \"...\")"))
+    (user-error "API not configured. Set OPENROUTER_API_KEY or create ~/.agent/config.el"))
 
   (let* ((tick (agent-increment-tick))
          (messages (agent-format-messages))
@@ -251,9 +267,9 @@ This is the main entry point for inference."
 
     ;; Make API call
     (let* ((response (agent-api-call messages))
-           (thought (agent-process-response response)))
+           (parsed (agent-process-response response)))
 
-      (if (not thought)
+      (if (not parsed)
           ;; Error case - still commit but note the failure
           (progn
             (agent-append-monologue (format "[ERROR] Inference failed: %s"
@@ -263,19 +279,31 @@ This is the main entry point for inference."
              (format "[TICK %d][%s][%s] Inference error"
                      tick thread-id mood)))
 
-        ;; Success - update monologue and commit
-        (let ((summary (if (> (length thought) 100)
-                           (concat (substring thought 0 100) "...")
-                         thought)))
-          (agent-append-monologue thought)
+        ;; Success - extract fields from parsed response
+        (let* ((monologue-line (or (plist-get parsed :monologue)
+                                   (plist-get parsed :thought)
+                                   "No thought"))
+               (eval-form (plist-get parsed :eval))
+               (summary (if (> (length monologue-line) 80)
+                            (concat (substring monologue-line 0 80) "...")
+                          monologue-line)))
+
+          ;; Log to monologue
+          (agent-append-monologue monologue-line)
+
+          ;; Store eval for next step (IMP-018 will execute it)
+          (when eval-form
+            (agent-set :pending-eval eval-form))
+
+          ;; Persist and commit
           (agent-persist-consciousness)
           (agent-git-commit
            (format "[TICK %d][%s][%s] %s"
                    tick thread-id (agent-mood) summary))
 
           ;; Display result
-          (message "Tick %d complete. Thought: %s" tick summary)
-          thought)))))
+          (message "Tick %d complete. %s" tick summary)
+          parsed)))))
 
 ;;; Inspection
 

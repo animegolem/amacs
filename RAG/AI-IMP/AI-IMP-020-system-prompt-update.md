@@ -5,16 +5,17 @@ tags:
   - phase-2
   - system-prompt
   - core-skill
-status: draft
+status: done
 depends_on:
   - AI-IMP-017
 implements: AI-EPIC-002
 created_date: 2025-12-19
-updated_date: 2025-12-20
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/agent-inference.el
   - skills/amacs-bootstrap-skill/core/SKILL.md
-confidence_score: 0.9
+confidence_score: 0.95
 ---
 
 # AI-IMP-020: System Prompt as Core Skill
@@ -214,17 +215,17 @@ skills/amacs-bootstrap-skill/core/SKILL.md   # Complete rewrite for system promp
 
 ## Implementation Checklist
 
-- [ ] Implement `agent--load-core-skill` with caching
-- [ ] Implement `agent-build-system-prompt` using core skill
-- [ ] Implement `agent-reload-core-skill` for development
-- [ ] Delete old `agent-system-prompt-template`
-- [ ] Rewrite core SKILL.md for system prompt role
-- [ ] Update core SKILL.md with skill binding section
-- [ ] Update core SKILL.md with chat section
-- [ ] Test: System prompt includes core skill content
-- [ ] Test: Current state appended correctly
-- [ ] Test: Cache works (second call doesn't re-read file)
-- [ ] Test: Reload clears cache
+- [x] Implement `agent--load-core-skill` with caching
+- [x] Implement `agent-build-system-prompt` using core skill
+- [x] Implement `agent-reload-core-skill` for development
+- [x] Delete old `agent-system-prompt-template`
+- [x] Rewrite core SKILL.md for system prompt role
+- [x] Update core SKILL.md with skill binding section
+- [x] Update core SKILL.md with chat section
+- [x] Test: System prompt includes core skill content
+- [x] Test: Current state appended correctly
+- [x] Test: Cache works (second call doesn't re-read file)
+- [x] Test: Reload clears cache
 
 ## Acceptance Criteria
 

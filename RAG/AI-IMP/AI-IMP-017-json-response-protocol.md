@@ -6,15 +6,16 @@ tags:
   - json
   - protocol
   - inference
-status: draft
+status: done
 depends_on:
   - AI-IMP-005
 implements: AI-EPIC-002
 created_date: 2025-12-19
-updated_date: 2025-12-20
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/agent-inference.el
-confidence_score: 0.9
+confidence_score: 0.95
 ---
 
 # AI-IMP-017: JSON Response Protocol
@@ -175,20 +176,20 @@ harness/agent-consciousness.el  # Update :mood to string type in schema
 
 ## Implementation Checklist
 
-- [ ] Implement `agent--extract-json` for markdown fence handling
-- [ ] Implement `agent--parse-response` with fallback
-- [ ] Rewrite `agent-process-response` for JSON
-- [ ] Delete old `agent--extract-mood` function
-- [ ] Delete old `agent--extract-confidence` function
-- [ ] Delete old `agent--clean-response` function
-- [ ] Update consciousness schema: `:mood` is string
-- [ ] Update any code comparing mood with `eq` to use `equal`
-- [ ] Test: Valid JSON parses correctly
-- [ ] Test: JSON in markdown fence extracts correctly
-- [ ] Test: Emoji mood preserved as string
-- [ ] Test: Keyword mood preserved as string
-- [ ] Test: Malformed JSON falls back gracefully
-- [ ] Test: Partial JSON (no closing brace) falls back
+- [x] Implement `agent--extract-json` for markdown fence handling
+- [x] Implement `agent--parse-response` with fallback
+- [x] Rewrite `agent-process-response` for JSON
+- [x] Delete old `agent--extract-mood` function
+- [x] Delete old `agent--extract-confidence` function
+- [x] Delete old `agent--clean-response` function
+- [x] Update consciousness schema: `:mood` is string
+- [x] Update any code comparing mood with `eq` to use `equal`
+- [x] Test: Valid JSON parses correctly
+- [x] Test: JSON in markdown fence extracts correctly
+- [x] Test: Emoji mood preserved as string
+- [x] Test: Keyword mood preserved as string
+- [x] Test: Malformed JSON falls back gracefully
+- [x] Test: Partial JSON (no closing brace) falls back
 
 ## Acceptance Criteria
 

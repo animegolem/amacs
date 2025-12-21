@@ -386,6 +386,52 @@
               (listp (plist-get ctx :global-buffers))
               "has :global-buffers list")))
 
+;;; IMP-017 Tests: JSON Response Protocol
+
+(defun test-json-parsing ()
+  "Test: JSON response parsing works correctly."
+  (message "\n--- Test: JSON Parsing ---")
+  (require 'agent-inference)
+
+  ;; Test valid JSON
+  (let ((parsed (agent--parse-response
+                 "{\"eval\": \"(+ 1 1)\", \"thought\": \"testing\", \"mood\": \"focused\", \"confidence\": 0.9, \"monologue\": \"test line\"}")))
+    (test-log "json-parse-eval"
+              (equal (plist-get parsed :eval) "(+ 1 1)")
+              (format "eval: %s" (plist-get parsed :eval)))
+    (test-log "json-parse-mood"
+              (equal (plist-get parsed :mood) "focused")
+              (format "mood: %s" (plist-get parsed :mood)))
+    (test-log "json-parse-success"
+              (plist-get parsed :parse-success)
+              "parse-success is t"))
+
+  ;; Test JSON in markdown fence
+  (let ((parsed (agent--parse-response
+                 "Here's my response:\n```json\n{\"eval\": null, \"thought\": \"thinking\", \"mood\": \"curious\", \"confidence\": 0.7, \"monologue\": \"hmm\"}\n```")))
+    (test-log "json-markdown-fence"
+              (equal (plist-get parsed :mood) "curious")
+              (format "extracted from fence: %s" (plist-get parsed :mood))))
+
+  ;; Test emoji mood preserved
+  (let ((parsed (agent--parse-response
+                 "{\"eval\": null, \"thought\": \"emoji test\", \"mood\": \"🤔\", \"confidence\": 0.8, \"monologue\": \"test\"}")))
+    (test-log "json-emoji-mood"
+              (equal (plist-get parsed :mood) "🤔")
+              (format "emoji: %s" (plist-get parsed :mood))))
+
+  ;; Test malformed JSON fallback
+  (let ((parsed (agent--parse-response "This is not valid JSON {broken")))
+    (test-log "json-fallback-mood"
+              (equal (plist-get parsed :mood) "uncertain")
+              "fallback mood is 'uncertain'")
+    (test-log "json-fallback-thought"
+              (stringp (plist-get parsed :thought))
+              "fallback thought is string")
+    (test-log "json-fallback-success"
+              (not (plist-get parsed :parse-success))
+              "parse-success is nil")))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -394,7 +440,7 @@
   (setq test-results '())
 
   (message "\n================================================")
-  (message "AMACS Harness Tests (IMP-001 + IMP-002 + IMP-003 + IMP-004)")
+  (message "AMACS Harness Tests")
   (message "================================================\n")
 
   (condition-case err
@@ -413,6 +459,7 @@
         (test-thread-switching)
         (test-global-buffers)
         (test-context-assembly)
+        (test-json-parsing)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -444,6 +491,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-thread-switching)
           (test-global-buffers)
           (test-context-assembly)
+          (test-json-parsing)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))
