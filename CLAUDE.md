@@ -31,9 +31,8 @@ amacs-rfc-v3.org   # Full architecture RFC - read for deep context
 ## Current Status
 
 **Phase 1 (Vampire Simulator)**: Complete. 39/39 tests passing.
-**Next work**:
-- IMP-011: First inference (API integration)
-- IMP-005: CI pipeline (byte-compile + tests)
+**Phase 2 (Hands and Arms)**: In progress. See AI-EPIC-002.
+**CI Pipeline**: Implemented. Run `./harness/ci-check.sh` before commits.
 
 ## RAG Documentation Conventions
 
@@ -53,17 +52,17 @@ emacs -Q -l test-harness.el
 
 All tests must pass. Test output shows PASS/FAIL per test and summary.
 
-## CI Pipeline (IMP-005 - Not Yet Implemented)
+## CI Pipeline
 
-When implemented, run:
+Run before committing:
 ```bash
 ./harness/ci-check.sh
 ```
 
-Will perform:
+Performs:
 1. Byte-compile all `.el` files (except test-harness.el) with strict warnings
 2. Run test suite in batch mode
-3. Exit 0 on success, non-zero on failure
+3. Exit 0 on success, 1 on byte-compile failure, 2 on test failure
 
 ## Elisp Gotchas (From Prior Sessions)
 
@@ -73,6 +72,9 @@ Will perform:
 4. **`parse-iso8601-time-string`** - fails silently in some Emacs versions. Wrap with fallback.
 5. **`url.el` multibyte error** - when POSTing JSON with `url-request-data`, encode as UTF-8: `(encode-coding-string body 'utf-8 t)` (the `t` forces unibyte)
 6. **`when-let`/`if-let` deprecated in Emacs 31** - use `when-let*`/`if-let*` instead. The `*` variants bind sequentially (like `let*`), which is usually what you want anyway.
+7. Unescaped single quotes in docstrings - 'symbol in docstrings triggers byte-compile error; omit the quote or use backticks
+8. Docstrings wider than 80 characters - byte-compiler warns; break with \ continuation
+9. Circular requires - use (defvar varname) and (declare-function func "file") for forward declarations
 
 ## Key Files to Read
 

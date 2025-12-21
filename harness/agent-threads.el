@@ -38,9 +38,10 @@
 
 ;;; Skill Tag Inference
 
-(defun agent-infer-skill-tags (buffers primary-mode)
-  "Infer skill tags from BUFFERS and PRIMARY-MODE.
-Returns a list of skill tag strings."
+(defun agent-infer-skill-tags (_buffers primary-mode)
+  "Infer skill tags from _BUFFERS and PRIMARY-MODE.
+Returns a list of skill tag strings.
+_BUFFERS is reserved for future buffer-pattern-based tags."
   (let ((tags '()))
     ;; Add mode-based tag
     (when primary-mode
@@ -246,23 +247,23 @@ Called during cold start."
     (princ "Open Threads:\n")
     (let ((open (agent-get :open-threads)))
       (if open
-          (dolist (t open)
-            (princ (format "  [%s] %s\n" 
-                           (plist-get t :id)
-                           (plist-get t :concern)))
-            (princ (format "    buffers: %s\n" (plist-get t :buffers)))
-            (princ (format "    hydrated: %s\n" (plist-get t :hydrated))))
+          (dolist (thr open)
+            (princ (format "  [%s] %s\n"
+                           (plist-get thr :id)
+                           (plist-get thr :concern)))
+            (princ (format "    buffers: %s\n" (plist-get thr :buffers)))
+            (princ (format "    hydrated: %s\n" (plist-get thr :hydrated))))
         (princ "  (none)\n")))
     
     (princ "\nCompleted Threads:\n")
     (let ((completed (agent-get :completed-threads)))
       (if completed
-          (dolist (t (seq-take completed 5))
+          (dolist (thr (seq-take completed 5))
             (princ (format "  [%s] %s\n"
-                           (plist-get t :id)
-                           (plist-get t :concern)))
-            (princ (format "    learned: %s\n" 
-                           (or (plist-get t :learned) "(none)"))))
+                           (plist-get thr :id)
+                           (plist-get thr :concern)))
+            (princ (format "    learned: %s\n"
+                           (or (plist-get thr :learned) "(none)"))))
         (princ "  (none)\n")))))
 
 (provide 'agent-threads)

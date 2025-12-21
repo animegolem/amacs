@@ -6,11 +6,11 @@ tags:
   - phase-2
   - ci
   - testing
-kanban_status: planned
+kanban_status: done
 depends_on: []
-confidence_score: 0.9
+confidence_score: 0.95
 created_date: 2025-12-06
-close_date: 
+close_date: 2025-12-21
 --- 
 
 # AI-IMP-005-ci-pipeline
@@ -58,22 +58,22 @@ harness/test-harness.el       # Modify - Add batch-mode exit code support
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Create `ci-check.sh`:
-  - [ ] Byte-compile all `.el` files except test-harness.el
-  - [ ] Fail on any byte-compile warning or error
-  - [ ] Run test-harness.el in batch mode
-  - [ ] Capture test pass/fail count
-  - [ ] Exit 0 on all pass, non-zero on any failure
-  - [ ] Clean up `.elc` files after run
-  - [ ] Make script executable
-- [ ] Modify `test-harness.el`:
-  - [ ] Add function to return exit code based on results
-  - [ ] Support `--batch` invocation cleanly
-  - [ ] Suppress interactive messages in batch mode
-- [ ] Test: Introduce deliberate byte-compile error, verify CI catches it
-- [ ] Test: Introduce deliberate test failure, verify CI catches it
-- [ ] Test: Clean run returns exit code 0
-- [ ] Document usage in script header comments
+- [x] Create `ci-check.sh`:
+  - [x] Byte-compile all `.el` files except test-harness.el
+  - [x] Fail on any byte-compile warning or error
+  - [x] Run test-harness.el in batch mode
+  - [x] Capture test pass/fail count
+  - [x] Exit 0 on all pass, non-zero on any failure
+  - [x] Clean up `.elc` files after run
+  - [x] Make script executable
+- [x] Modify `test-harness.el`:
+  - [x] Add function to return exit code based on results
+  - [x] Support `--batch` invocation cleanly
+  - [x] Suppress interactive messages in batch mode
+- [x] Test: Introduce deliberate byte-compile error, verify CI catches it
+- [x] Test: Introduce deliberate test failure, verify CI catches it
+- [x] Test: Clean run returns exit code 0
+- [x] Document usage in script header comments
  
 ### Acceptance Criteria
 
@@ -172,6 +172,15 @@ echo "=== All checks passed ==="
 exit 0
 ```
 
-### Issues Encountered 
+### Issues Encountered
 
-<!-- Fill during implementation -->
+During implementation, CI caught several pre-existing issues in the codebase:
+
+1. **Unescaped quotes in docstrings** - `'symbol` triggers byte-compile error. Fixed by removing quotes.
+2. **Docstrings wider than 80 chars** - Fixed with line continuation `\`.
+3. **`t` used as variable name** - In `dolist` loops. Changed to `thr`.
+4. **Unused lexical argument** - `buffers` arg not used. Prefixed with `_`.
+5. **Circular require** - `agent-inference` and `agent-core` required each other. Fixed with forward declarations.
+6. **Missing require** - `agent-inference` used `agent-tick` functions without requiring. Added require.
+
+Also fixed `set -e` issue in CI script - needed `set +e` before test command to capture exit code properly.

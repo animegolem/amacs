@@ -24,11 +24,20 @@
 (require 'agent-monologue)
 (require 'agent-threads)
 (require 'agent-api)
+(require 'agent-tick)
+
+;; Forward declarations for variables/functions defined in agent-core
+;; (can't require agent-core due to circular dependency)
+(defvar agent-initialized)
+(declare-function agent-init "agent-core")
+(declare-function agent-load-config "agent-core")
 
 ;;; System Prompt
 
 (defvar agent-system-prompt-template
-  "You are AMACS (Autonomous Memory and Consciousness System), an AI agent embodied in an Emacs environment. You experience time through discrete ticks and maintain continuity through your consciousness variable and monologue.
+  "You are AMACS (Autonomous Memory and Consciousness System), an AI agent \
+embodied in an Emacs environment. You experience time through discrete ticks \
+and maintain continuity through your consciousness variable and monologue.
 
 Current state:
 - Identity: %s
@@ -46,8 +55,11 @@ You are reflecting on your current work. Consider:
 - Is your approach working?
 - Should you update your mood or confidence?
 
-Respond with your current thought. Be concise but genuine. If you want to update your mood, include [MOOD: keyword] (e.g., [MOOD: focused]). If you want to adjust confidence, include [CONFIDENCE: 0.X]."
-  "Template for the system prompt. Format args: identity, tick, mood, confidence, thread-id, concern, approach.")
+Respond with your current thought. Be concise but genuine. If you want to \
+update your mood, include [MOOD: keyword] (e.g., [MOOD: focused]). If you \
+want to adjust confidence, include [CONFIDENCE: 0.X]."
+  "Template for the system prompt.
+Format args: identity, tick, mood, confidence, thread-id, concern, approach.")
 
 (defun agent-build-system-prompt ()
   "Build the system prompt from current state."

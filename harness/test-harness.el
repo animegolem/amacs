@@ -39,7 +39,7 @@
            (if message (format " - %s" message) "")))
 
 (defun test-summary ()
-  "Print test summary."
+  "Print test summary. Returns t if all passed, nil otherwise."
   (let ((passed (length (seq-filter #'cadr test-results)))
         (total (length test-results)))
     (message "\n==================")
@@ -49,7 +49,8 @@
       (message "Failed tests:")
       (dolist (test test-results)
         (unless (cadr test)
-          (message "  - %s: %s" (car test) (or (caddr test) "no details")))))))
+          (message "  - %s: %s" (car test) (or (caddr test) "no details")))))
+    (= passed total)))
 
 ;;; Clean Slate
 
@@ -391,11 +392,11 @@
   "Run all tests and print summary."
   (interactive)
   (setq test-results '())
-  
+
   (message "\n================================================")
   (message "AMACS Harness Tests (IMP-001 + IMP-002 + IMP-003 + IMP-004)")
   (message "================================================\n")
-  
+
   (condition-case err
       (progn
         (test-cold-start)
@@ -419,7 +420,41 @@
      (message "TEST ERROR: %s" (error-message-string err))
      (test-summary))))
 
-;; Run tests when loaded
-(test-run-all)
+(defun test-run-all-batch ()
+  "Run all tests in batch mode, exit with appropriate code.
+Exit 0 if all tests pass, exit 1 if any fail."
+  (let ((all-passed nil))
+    (condition-case err
+        (progn
+          (setq test-results '())
+          (message "\n================================================")
+          (message "AMACS Harness Tests (Batch Mode)")
+          (message "================================================\n")
+          (test-cold-start)
+          (test-skill-system-init)
+          (test-skill-loading)
+          (test-default-thread-created)
+          (test-thread-creation)
+          (test-tick-cycle)
+          (test-monologue-append)
+          (test-monologue-window-size)
+          (test-commit-includes-monologue)
+          (test-skill-tracking)
+          (test-relevant-skills)
+          (test-thread-switching)
+          (test-global-buffers)
+          (test-context-assembly)
+          (test-warm-start)
+          (test-long-gap)
+          (setq all-passed (test-summary)))
+      (error
+       (message "TEST ERROR: %s" (error-message-string err))
+       (test-summary)
+       (setq all-passed nil)))
+    (kill-emacs (if all-passed 0 1))))
+
+;; Run tests when loaded interactively (not in batch mode)
+(unless noninteractive
+  (test-run-all))
 
 ;;; test-harness.el ends here

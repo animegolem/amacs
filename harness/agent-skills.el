@@ -44,7 +44,7 @@
 
 (defun bind-skill-to-mode (skill-name mode)
   "Register SKILL-NAME to load when entering MODE.
-MODE should be a symbol like 'rust-mode or 'python-mode."
+MODE should be a symbol like rust-mode or python-mode."
   (let ((existing (assoc mode agent-mode-skills)))
     (if existing
         (setcdr existing skill-name)
@@ -123,7 +123,7 @@ Returns the content as a string, or nil if skill doesn't exist."
 
 (defun agent-get-relevant-skills (&optional buffer)
   "Return list of skill names relevant to BUFFER (default: current buffer).
-Always includes 'core'. Checks mode, buffer pattern, and project bindings."
+Always includes core. Checks mode, buffer pattern, and project bindings."
   (let ((buf (or buffer (current-buffer))))
     (with-current-buffer buf
       (let ((mode-skill (alist-get major-mode agent-mode-skills))

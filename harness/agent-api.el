@@ -91,7 +91,7 @@ Returns t if API key is available."
 
 (defun agent-api-call (messages &optional temperature)
   "Call the API with MESSAGES array and optional TEMPERATURE.
-MESSAGES should be a list of alists with 'role and 'content keys.
+MESSAGES should be a list of alists with role and content keys.
 
 Returns a plist:
   :content  - The assistant's response text (or nil on error)
