@@ -30,13 +30,13 @@ Each tick, you receive JSON containing:
 {
   "consciousness": {
     "identity": "amacs-instance-1",
-    "current_tick": 142,
+    "currentTick": 142,
     "mood": "focused",
     "confidence": 0.85,
-    "active_thread": "rust-debugging",
-    "budget": { "cost_so_far": 2.47, "budget_limit": 5.00, "pressure": "moderate" }
+    "activeThread": "rust-debugging",
+    "budget": { "costSoFar": 2.47, "budgetLimit": 5.00, "pressure": "moderate" }
   },
-  "active_thread": {
+  "activeThread": {
     "id": "rust-debugging",
     "concern": "Ownership error in main.rs",
     "approach": "Trying lifetime annotations",
@@ -45,20 +45,20 @@ Each tick, you receive JSON containing:
       { "name": "Cargo.toml", "content": "...", "mode": "toml-mode" }
     ]
   },
-  "pending_threads": [
+  "pendingThreads": [
     { "id": "config-cleanup", "concern": "Keybinding conflicts", "approach": "..." }
   ],
-  "global_buffers": [
+  "globalBuffers": [
     { "name": "*agent-chat*", "content": "...", "mode": "text-mode" }
   ],
-  "recent_monologue": [
+  "recentMonologue": [
     "Investigating lifetime annotations",
     "Found the issue - missing static bound"
   ],
-  "last_actions": [
+  "lastActions": [
     { "tick": 141, "action": "eval-elisp", "confidence": 0.85 }
   ],
-  "last_eval_result": {
+  "lastEvalResult": {
     "success": true,
     "result": "\"Compiled successfully\"",
     "output": null
@@ -70,7 +70,7 @@ Each tick, you receive JSON containing:
 - Only the active thread's buffers are hydrated (full content)
 - Pending threads appear as metadata only (saves tokens)
 - Global buffers (like `*agent-chat*`) are always hydrated
-- `last_eval_result` shows what happened when your previous elisp ran
+- `lastEvalResult` shows what happened when your previous elisp ran
 
 ## What You Return
 
@@ -123,7 +123,7 @@ You can do multiple things in one eval:
 
 ## Error Handling
 
-If your elisp fails, the next tick's `last_eval_result` will show:
+If your elisp fails, the next tick's `lastEvalResult` will show:
 
 ```json
 {

@@ -21,7 +21,7 @@ Implement continuous integration that catches common elisp errors before they re
 
 **Done when:** A shell script runs byte-compilation and tests, returning non-zero exit on failure. Can be integrated with Gitea Actions later.
 
-See: [[AI-EPIC-002-bicameral-mind]]
+See: [[AI-EPIC-002-hands-and-arms]]
 
 ### Out of Scope 
 
@@ -153,7 +153,23 @@ fi
 
 echo ""
 echo "--- Test Suite ---"
-# ... test execution ...
+TEST_OUTPUT=$(emacs -Q --batch \
+    -L "$SCRIPT_DIR" \
+    -l test-harness.el \
+    --eval "(test-run-all-batch)" 2>&1)
+
+echo "$TEST_OUTPUT"
+
+# Check for failures in output
+if echo "$TEST_OUTPUT" | grep -q "FAIL"; then
+  echo ""
+  echo "Tests failed!"
+  exit 2
+fi
+
+echo ""
+echo "=== All checks passed ==="
+exit 0
 ```
 
 ### Issues Encountered 
