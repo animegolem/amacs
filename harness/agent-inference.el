@@ -240,6 +240,51 @@ Returns parsed response plist with :eval, :thought, :mood, etc."
 
         parsed))))
 
+;;; Eval Execution (IMP-018)
+
+(defun agent-eval (elisp-string)
+  "Evaluate ELISP-STRING, capturing result or error.
+Returns plist with :success, :result, :error, :skipped."
+  (if (or (null elisp-string)
+          (and (stringp elisp-string)
+               (string-empty-p (string-trim elisp-string))))
+      (list :success t :result nil :error nil :skipped t)
+    (condition-case err
+        (let* ((form (read elisp-string))
+               (result (eval form t)))  ; t = lexical binding
+          (list :success t
+                :result (prin1-to-string result)
+                :error nil
+                :skipped nil))
+      (error
+       (list :success nil
+             :result nil
+             :error (error-message-string err)
+             :skipped nil)))))
+
+(defun agent-record-eval (elisp-string eval-result)
+  "Record EVAL-RESULT for ELISP-STRING in consciousness."
+  (agent-set :last-eval-result
+             (list :elisp elisp-string
+                   :success (plist-get eval-result :success)
+                   :result (plist-get eval-result :result)
+                   :error (plist-get eval-result :error)
+                   :tick (agent-current-tick))))
+
+(defun agent--format-eval-for-monologue (elisp-string eval-result)
+  "Format eval result for monologue entry.
+Returns nil for skipped evals (no logging needed)."
+  (if (plist-get eval-result :skipped)
+      nil  ; Don't log skipped evals
+    (if (plist-get eval-result :success)
+        (format "EVAL: %s => %s"
+                (truncate-string-to-width elisp-string 50 nil nil "...")
+                (truncate-string-to-width
+                 (or (plist-get eval-result :result) "nil") 30 nil nil "..."))
+      (format "EVAL ERROR: %s => %s"
+              (truncate-string-to-width elisp-string 50 nil nil "...")
+              (plist-get eval-result :error)))))
+
 ;;; Main Entry Point
 
 (defun agent-think ()
@@ -288,12 +333,17 @@ This is the main entry point for inference."
                             (concat (substring monologue-line 0 80) "...")
                           monologue-line)))
 
-          ;; Log to monologue
-          (agent-append-monologue monologue-line)
+          ;; Execute eval if present (IMP-018)
+          (let ((eval-result (agent-eval eval-form)))
+            ;; Record result in consciousness
+            (agent-record-eval eval-form eval-result)
+            ;; Log eval to monologue (skipped evals return nil)
+            (when-let* ((eval-log (agent--format-eval-for-monologue
+                                   eval-form eval-result)))
+              (agent-append-monologue eval-log)))
 
-          ;; Store eval for next step (IMP-018 will execute it)
-          (when eval-form
-            (agent-set :pending-eval eval-form))
+          ;; Log thought to monologue
+          (agent-append-monologue monologue-line)
 
           ;; Persist and commit
           (agent-persist-consciousness)

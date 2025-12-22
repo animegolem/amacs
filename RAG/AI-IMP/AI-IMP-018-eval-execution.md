@@ -5,12 +5,13 @@ tags:
   - phase-2
   - eval
   - motor-control
-status: draft
+status: done
 depends_on:
   - AI-IMP-017
 implements: AI-EPIC-002
 created_date: 2025-12-19
-updated_date: 2025-12-20
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/agent-inference.el
   - harness/agent-consciousness.el
@@ -121,18 +122,18 @@ harness/agent-consciousness.el # Add :last-eval-result field
 
 ## Implementation Checklist
 
-- [ ] Implement `agent-eval` with error handling
-- [ ] Implement `agent-record-eval` for consciousness update
-- [ ] Implement `agent--format-eval-for-monologue`
-- [ ] Integrate into `agent-think` flow
-- [ ] Handle null/empty eval field (skip gracefully)
-- [ ] Use lexical binding for eval (`t` second arg)
-- [ ] Test: Simple expression `(+ 2 2)` returns `"4"`
-- [ ] Test: Error expression `(/ 1 0)` captures error message
-- [ ] Test: Multi-statement `(progn ...)` works
-- [ ] Test: Null eval field skips without error
-- [ ] Test: Empty string eval skips without error
-- [ ] Test: Monologue contains eval log
+- [x] Implement `agent-eval` with error handling
+- [x] Implement `agent-record-eval` for consciousness update
+- [x] Implement `agent--format-eval-for-monologue`
+- [x] Integrate into `agent-think` flow
+- [x] Handle null/empty eval field (skip gracefully)
+- [x] Use lexical binding for eval (`t` second arg)
+- [x] Test: Simple expression `(+ 2 2)` returns `"4"`
+- [x] Test: Error expression `(/ 1 0)` captures error message
+- [x] Test: Multi-statement `(progn ...)` works
+- [x] Test: Null eval field skips without error
+- [x] Test: Empty string eval skips without error
+- [x] Test: Monologue contains eval log
 
 ## Acceptance Criteria
 

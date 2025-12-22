@@ -432,6 +432,67 @@
               (not (plist-get parsed :parse-success))
               "parse-success is nil")))
 
+(defun test-eval-execution ()
+  "Test: Eval execution works correctly (IMP-018)."
+  (message "\n--- Test: Eval Execution ---")
+  (require 'agent-inference)
+
+  ;; Test simple expression
+  (let ((result (agent-eval "(+ 2 2)")))
+    (test-log "eval-simple-success"
+              (plist-get result :success)
+              "simple eval succeeds")
+    (test-log "eval-simple-result"
+              (equal (plist-get result :result) "4")
+              (format "result: %s" (plist-get result :result))))
+
+  ;; Test error capture (undefined function)
+  (let ((result (agent-eval "(undefined-function-xyz)")))
+    (test-log "eval-error-captured"
+              (not (plist-get result :success))
+              "error eval has :success nil")
+    (test-log "eval-error-message"
+              (stringp (plist-get result :error))
+              (format "error: %s" (plist-get result :error))))
+
+  ;; Test progn (multi-statement)
+  (let ((result (agent-eval "(progn (setq test-var-xyz 1) (+ test-var-xyz 2))")))
+    (test-log "eval-progn-success"
+              (plist-get result :success)
+              "progn eval succeeds")
+    (test-log "eval-progn-result"
+              (equal (plist-get result :result) "3")
+              (format "result: %s" (plist-get result :result))))
+
+  ;; Test null eval skips
+  (let ((result (agent-eval nil)))
+    (test-log "eval-null-skipped"
+              (plist-get result :skipped)
+              "null eval is skipped")
+    (test-log "eval-null-success"
+              (plist-get result :success)
+              "null eval has :success t"))
+
+  ;; Test empty string skips
+  (let ((result (agent-eval "  ")))
+    (test-log "eval-empty-skipped"
+              (plist-get result :skipped)
+              "empty string eval is skipped"))
+
+  ;; Test monologue formatting
+  (let* ((result (agent-eval "(+ 10 20)"))
+         (log-line (agent--format-eval-for-monologue "(+ 10 20)" result)))
+    (test-log "eval-monologue-format"
+              (and log-line (string-match "EVAL:" log-line))
+              (format "log: %s" log-line)))
+
+  ;; Test monologue nil for skipped
+  (let* ((result (agent-eval nil))
+         (log-line (agent--format-eval-for-monologue nil result)))
+    (test-log "eval-monologue-skipped-nil"
+              (null log-line)
+              "skipped eval returns nil for monologue")))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -460,6 +521,7 @@
         (test-global-buffers)
         (test-context-assembly)
         (test-json-parsing)
+        (test-eval-execution)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -492,6 +554,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-global-buffers)
           (test-context-assembly)
           (test-json-parsing)
+          (test-eval-execution)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))
