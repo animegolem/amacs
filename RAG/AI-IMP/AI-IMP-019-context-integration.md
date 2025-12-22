@@ -5,12 +5,13 @@ tags:
   - phase-2
   - context
   - eval
-status: draft
+status: done
 depends_on:
   - AI-IMP-018
 implements: AI-EPIC-002
 created_date: 2025-12-19
-updated_date: 2025-12-20
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/agent-inference.el
   - harness/agent-context.el
@@ -162,18 +163,18 @@ harness/agent-context.el     # Integrate in context building
 
 ## Implementation Checklist
 
-- [ ] Implement `agent--kebab-to-camel`
-- [ ] Implement `agent--plist-to-json-alist`
-- [ ] Implement `agent--format-last-eval-for-prompt`
-- [ ] Integrate into `agent-build-user-prompt`
-- [ ] Position as first section (most relevant)
-- [ ] Handle nil/skipped eval gracefully (omit section)
-- [ ] Include tick number for temporal context
-- [ ] Test: Eval result appears in prompt
-- [ ] Test: Keys are camelCase in JSON
-- [ ] Test: Error result clearly shows failure
-- [ ] Test: First tick (no eval) works without error
-- [ ] Test: Skipped eval doesn't show section
+- [x] Implement `agent--kebab-to-camel`
+- [x] Implement `agent--plist-to-json-alist`
+- [x] Implement `agent--format-last-eval-for-prompt`
+- [x] Integrate into `agent-build-user-prompt`
+- [x] Position as first section (most relevant)
+- [x] Handle nil/skipped eval gracefully (omit section)
+- [x] Include tick number for temporal context
+- [x] Test: Eval result appears in prompt
+- [x] Test: Keys are camelCase in JSON
+- [x] Test: Error result clearly shows failure
+- [x] Test: First tick (no eval) works without error
+- [x] Test: Skipped eval doesn't show section
 
 ## Acceptance Criteria
 

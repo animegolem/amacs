@@ -493,6 +493,66 @@
               (null log-line)
               "skipped eval returns nil for monologue")))
 
+(defun test-context-integration ()
+  "Test: Context integration for eval results (IMP-019)."
+  (message "\n--- Test: Context Integration ---")
+  (require 'agent-inference)
+
+  ;; Test kebab-to-camel
+  (test-log "kebab-to-camel-simple"
+            (equal (agent--kebab-to-camel "last-eval-result") "lastEvalResult")
+            (format "result: %s" (agent--kebab-to-camel "last-eval-result")))
+  (test-log "kebab-to-camel-single"
+            (equal (agent--kebab-to-camel "eval") "eval")
+            "single word unchanged")
+
+  ;; Test plist-to-json-alist
+  (let ((alist (agent--plist-to-json-alist '(:last-eval "test" :my-key 42))))
+    (test-log "plist-to-alist-keys"
+              (and (assoc "lastEval" alist) (assoc "myKey" alist))
+              (format "keys: %s" (mapcar #'car alist)))
+    (test-log "plist-to-alist-values"
+              (equal (cdr (assoc "myKey" alist)) 42)
+              "values preserved"))
+
+  ;; Test eval result in prompt (success case)
+  (agent-set :last-eval-result
+             '(:elisp "(+ 2 2)" :success t :result "4" :error nil :tick 5))
+  (let ((section (agent--format-last-eval-for-prompt)))
+    (test-log "eval-context-exists"
+              (and section (string-match "Last Eval Result" section))
+              "section header present")
+    (test-log "eval-context-camel-keys"
+              (and section (string-match "\"success\"" section))
+              "camelCase keys in JSON")
+    (test-log "eval-context-tick"
+              (and section (string-match "tick 5" section))
+              "tick number in header"))
+
+  ;; Test eval error in prompt
+  (agent-set :last-eval-result
+             '(:elisp "(bad)" :success nil :result nil :error "void function" :tick 6))
+  (let ((section (agent--format-last-eval-for-prompt)))
+    (test-log "eval-context-error"
+              (and section
+                   (or (string-match "\"success\":false" section)
+                       (string-match "\"success\":null" section)))
+              "error shows success:false or null"))
+
+  ;; Test skipped eval returns nil
+  (agent-set :last-eval-result '(:skipped t :success t))
+  (let ((section (agent--format-last-eval-for-prompt)))
+    (test-log "eval-context-skipped-nil"
+              (null section)
+              "skipped eval returns nil"))
+
+  ;; Test no eval result returns nil
+  (agent-set :last-eval-result nil)
+  (let ((section (agent--format-last-eval-for-prompt)))
+    (test-log "eval-context-none-nil"
+              (null section)
+              "no eval returns nil")))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -522,6 +582,7 @@
         (test-context-assembly)
         (test-json-parsing)
         (test-eval-execution)
+        (test-context-integration)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -555,6 +616,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-context-assembly)
           (test-json-parsing)
           (test-eval-execution)
+          (test-context-integration)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))

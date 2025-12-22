@@ -72,6 +72,38 @@
             thread-id
             concern)))
 
+;;; Serialization Helpers (IMP-019)
+
+(defun agent--kebab-to-camel (string)
+  "Convert kebab-case STRING to camelCase."
+  (let ((parts (split-string string "-")))
+    (concat (car parts)
+            (mapconcat #'capitalize (cdr parts) ""))))
+
+(defun agent--plist-to-json-alist (plist)
+  "Convert PLIST to alist with camelCase keys for JSON encoding."
+  (let ((result '()))
+    (while plist
+      (let* ((key (pop plist))
+             (val (pop plist))
+             (key-name (if (keywordp key)
+                           (substring (symbol-name key) 1)  ; remove :
+                         (symbol-name key)))
+             (json-key (agent--kebab-to-camel key-name)))
+        (push (cons json-key val) result)))
+    (nreverse result)))
+
+(defun agent--format-last-eval-for-prompt ()
+  "Format :last-eval-result for inclusion in user prompt.
+Returns nil if no eval or eval was skipped."
+  (when-let* ((last-eval (agent-get :last-eval-result)))
+    (unless (plist-get last-eval :skipped)
+      (let* ((tick (plist-get last-eval :tick))
+             (json-alist (agent--plist-to-json-alist last-eval)))
+        (format "## Last Eval Result (tick %d)\n```json\n%s\n```"
+                (or tick 0)
+                (json-encode json-alist))))))
+
 ;;; User Prompt (Context)
 
 (defun agent--format-buffer-for-prompt (buffer-plist)
@@ -103,6 +135,10 @@
          (monologue (plist-get ctx :recent-monologue))
          (last-actions (plist-get ctx :last-actions))
          (sections '()))
+
+    ;; Last eval result (most immediate context) - IMP-019
+    (when-let* ((eval-section (agent--format-last-eval-for-prompt)))
+      (push eval-section sections))
 
     ;; Active thread buffers
     (when (and active (plist-get active :buffers))
