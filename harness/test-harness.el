@@ -584,6 +584,55 @@
               (null section)
               "no bound skills returns nil")))
 
+(defun test-chat-interface ()
+  "Test: Chat interface functions (IMP-022)."
+  (message "\n--- Test: Chat Interface ---")
+  (require 'agent-chat)
+
+  ;; Test consciousness has chat-pending field
+  (test-log "chat-pending-field"
+            (plist-member agent-consciousness :chat-pending)
+            "consciousness has :chat-pending")
+
+  ;; Test chat-pending starts nil
+  (test-log "chat-pending-nil"
+            (null (agent-get :chat-pending))
+            "chat-pending starts nil")
+
+  ;; Test setting chat-pending
+  (agent-set :chat-pending (list :buffer "*test-chat*" :queued-at (current-time)))
+  (test-log "chat-pending-set"
+            (agent-chat-pending-p)
+            "agent-chat-pending-p returns t after setting")
+
+  ;; Test chat buffer name retrieval
+  (test-log "chat-buffer-name"
+            (equal (agent-chat-buffer-name) "*test-chat*")
+            (format "buffer name: %s" (agent-chat-buffer-name)))
+
+  ;; Test creating chat buffer
+  (let ((buf (agent-create-chat-buffer "*test-amacs-chat*")))
+    (test-log "chat-buffer-created"
+              (bufferp buf)
+              "chat buffer created")
+    (test-log "chat-buffer-has-mode"
+              (with-current-buffer buf
+                (and (derived-mode-p 'org-mode)
+                     amacs-chat-mode))
+              "buffer has org-mode and amacs-chat-mode")
+    (test-log "chat-buffer-has-header"
+              (with-current-buffer buf
+                (string-match "AMACS Chat" (buffer-string)))
+              "buffer has title")
+    ;; Clean up
+    (kill-buffer buf))
+
+  ;; Test clear pending
+  (agent-chat-clear-pending)
+  (test-log "chat-cleared"
+            (not (agent-chat-pending-p))
+            "chat-pending cleared"))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -615,6 +664,7 @@
         (test-eval-execution)
         (test-context-integration)
         (test-skill-binding)
+        (test-chat-interface)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -650,6 +700,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-eval-execution)
           (test-context-integration)
           (test-skill-binding)
+          (test-chat-interface)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))

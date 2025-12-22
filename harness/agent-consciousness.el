@@ -67,7 +67,8 @@ and continuity. See `agent-init-consciousness' for full schema.")
     
     ;; Human interaction
     :human-review-requested nil
-    
+    :chat-pending nil
+
     ;; Budget
     :budget (:cost-so-far 0.0
              :budget-limit 5.0
