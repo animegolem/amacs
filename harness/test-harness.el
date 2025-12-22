@@ -633,6 +633,128 @@
             (not (agent-chat-pending-p))
             "chat-pending cleared"))
 
+;;; Integration Tests (Manual - require API key)
+
+(defun test-eval-loop ()
+  "Integration test for eval loop (IMP-021).
+Requires API key configured. Run with M-x test-eval-loop.
+NOT included in automated CI tests."
+  (interactive)
+  (message "\n=== EVAL LOOP INTEGRATION TEST ===\n")
+  (setq test-results '())
+
+  ;; Setup
+  (test-clean-slate)
+  (agent-init)
+
+  ;; Verify API is configured
+  (unless (agent-api-configured-p)
+    (user-error "API not configured. Set OPENROUTER_API_KEY first"))
+
+  ;; Round 1: First Think
+  (message "--- Round 1: First Think ---")
+  (condition-case err
+      (let ((thought1 (agent-think)))
+        (message "Response received")
+
+        ;; Check eval happened
+        (let ((last-eval (agent-get :last-eval-result)))
+          (if (and last-eval (not (plist-get last-eval :skipped)))
+              (progn
+                (message "Eval executed: %s" (plist-get last-eval :elisp))
+                (message "Result: %s" (plist-get last-eval :result))
+                (message "Success: %s" (plist-get last-eval :success))
+                (test-log "round-1-eval" t
+                          (format "Eval: %s => %s"
+                                  (plist-get last-eval :elisp)
+                                  (plist-get last-eval :result))))
+            (message "No eval in round 1 (agent may have returned null)")
+            (test-log "round-1-eval" t "Agent didn't eval (acceptable)"))))
+    (error
+     (message "Round 1 error: %s" (error-message-string err))
+     (test-log "round-1-eval" nil (error-message-string err))))
+
+  ;; Brief pause to avoid rate limits
+  (message "\nPausing 2 seconds for rate limit...")
+  (sleep-for 2)
+
+  ;; Round 2: Seeing Results
+  (message "\n--- Round 2: Seeing Results ---")
+  (condition-case err
+      (let ((thought2 (agent-think)))
+        (message "Response received")
+
+        ;; Check agent saw previous result
+        (let ((last-eval (agent-get :last-eval-result)))
+          (test-log "round-2-complete" t
+                    (format "Tick: %d, Last eval tick: %s"
+                            (agent-current-tick)
+                            (plist-get last-eval :tick)))))
+    (error
+     (message "Round 2 error: %s" (error-message-string err))
+     (test-log "round-2-complete" nil (error-message-string err))))
+
+  ;; Run assertions
+  (test-eval-loop-assertions)
+
+  ;; Summary
+  (message "\n--- Results ---")
+  (test-summary))
+
+(defun test-eval-loop-assertions ()
+  "Run assertions on eval loop state after test-eval-loop."
+  ;; Consciousness should have eval result
+  (test-log "consciousness-has-eval"
+            (agent-get :last-eval-result)
+            ":last-eval-result in consciousness")
+
+  ;; Tick should have advanced
+  (test-log "tick-advanced"
+            (>= (agent-current-tick) 2)
+            (format "Tick is %d" (agent-current-tick)))
+
+  ;; Git commit should have happened
+  (test-log "git-committed"
+            (agent-get :last-commit)
+            (format "Last commit: %s" (agent-get :last-commit)))
+
+  ;; Monologue should have entries
+  (test-log "monologue-has-entries"
+            (> (length (agent-get :recent-monologue)) 1)
+            (format "Monologue entries: %d"
+                    (length (agent-get :recent-monologue)))))
+
+(defun test-eval-error-handling ()
+  "Test that eval errors don't crash harness.
+Run with M-x test-eval-error-handling."
+  (interactive)
+  (message "\n=== EVAL ERROR HANDLING TEST ===\n")
+  (setq test-results '())
+
+  ;; Test error case directly
+  (require 'agent-inference)
+  (let ((result (agent-eval "(this-function-does-not-exist)")))
+    (test-log "error-captured"
+              (not (plist-get result :success))
+              "Error should be captured")
+    (test-log "error-has-message"
+              (stringp (plist-get result :error))
+              (format "Error: %s" (plist-get result :error)))
+    (test-log "no-crash"
+              t
+              "Harness didn't crash"))
+
+  ;; Test read error
+  (let ((result (agent-eval "(unclosed-paren")))
+    (test-log "read-error-captured"
+              (not (plist-get result :success))
+              "Read error should be captured")
+    (test-log "read-error-message"
+              (stringp (plist-get result :error))
+              (format "Read error: %s" (plist-get result :error))))
+
+  (test-summary))
+
 ;;; Run All Tests
 
 (defun test-run-all ()

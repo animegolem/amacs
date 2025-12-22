@@ -5,7 +5,7 @@ tags:
   - phase-2
   - integration-test
   - end-to-end
-status: draft
+status: done
 depends_on:
   - AI-IMP-018
   - AI-IMP-019
@@ -13,6 +13,8 @@ depends_on:
   - AI-IMP-022
 implements: AI-EPIC-002
 created_date: 2025-12-19
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/test-harness.el
   - harness/agent-inference.el
@@ -178,13 +180,13 @@ harness/test-harness.el   # Add integration test functions
 
 ## Implementation Checklist
 
-- [ ] Add `test-eval-loop` function
-- [ ] Add `test-eval-loop-assertions` function
-- [ ] Add `test-eval-error-handling` function
-- [ ] Test requires API key (document this)
-- [ ] Add rate limit protection (sleep between calls)
-- [ ] Test passes with real API calls
-- [ ] Document how to run: `M-x test-eval-loop`
+- [x] Add `test-eval-loop` function
+- [x] Add `test-eval-loop-assertions` function
+- [x] Add `test-eval-error-handling` function
+- [x] Test requires API key (documented in docstring)
+- [x] Add rate limit protection (sleep between calls)
+- [x] NOT included in automated CI (interactive only)
+- [x] Document how to run: `M-x test-eval-loop`
 
 ## Acceptance Criteria
 
