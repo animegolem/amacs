@@ -6,12 +6,13 @@ tags:
   - motor-control
   - eval
   - code-mode
-status: draft
+status: done
 depends_on:
   - AI-EPIC-001c
   - AI-ADR-002
 created_date: 2025-12-19
-updated_date: 2025-12-20
+updated_date: 2025-12-21
+close_date: 2025-12-21
 related_files:
   - harness/agent-inference.el
   - harness/agent-tick.el
@@ -35,16 +36,16 @@ perceive → think → return elisp → harness evals → agent sees result → 
 
 ## Acceptance Criteria
 
-- [ ] CI pipeline catches elisp errors before they reach agent
-- [ ] Agent returns JSON with eval/thought/mood/confidence/monologue fields
-- [ ] Harness parses JSON (including markdown-fenced), executes eval field, captures result/error
-- [ ] Next tick includes lastEvalResult in context
-- [ ] Human can communicate via org-mode chat buffer
-- [ ] Agent can read chat and respond with structured output
-- [ ] Core skill loads as system prompt (cached)
-- [ ] Agent can bind skills to threads, skills load when thread is active
-- [ ] End-to-end: agent successfully evaluates (+ 2 2) and sees result "4"
-- [ ] Mood stored as free string (keyword or emoji)
+- [x] CI pipeline catches elisp errors before they reach agent (IMP-005)
+- [x] Agent returns JSON with eval/thought/mood/confidence/monologue fields (IMP-017)
+- [x] Harness parses JSON (including markdown-fenced), executes eval field, captures result/error (IMP-017, IMP-018)
+- [x] Next tick includes lastEvalResult in context (IMP-019)
+- [x] Human can communicate via org-mode chat buffer (IMP-022)
+- [x] Agent can read chat and respond with structured output (IMP-022)
+- [x] Core skill loads as system prompt (cached) (IMP-020)
+- [x] Agent can bind skills to threads, skills load when thread is active (IMP-023)
+- [x] End-to-end: agent successfully evaluates (+ 2 2) and sees result "4" (IMP-021)
+- [x] Mood stored as free string (keyword or emoji) (IMP-017)
 
 ## Scope
 
