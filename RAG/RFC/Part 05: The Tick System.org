@@ -43,7 +43,8 @@ Context is built from active thread + global buffers. See [[AI-ADR-001-thread-ce
          :concern ,(plist-get active :concern)
          :approach ,(plist-get active :approach)
          :buffers ,(hydrate-buffers (plist-get active :buffers))
-         :skills ,(load-thread-skills active))
+         :bound-skills ,(plist-get active :bound-skills)
+         :skills ,(load-bound-skills active))
       
       ;; Pending threads - dehydrated (metadata only)
       :pending-threads

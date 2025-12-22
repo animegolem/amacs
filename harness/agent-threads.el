@@ -74,6 +74,7 @@ Returns the new thread plist (not yet added to consciousness)."
           :concern concern
           :goal nil
           :deliverable nil
+          :bound-skills '()
           :thread-type :exploratory
           :buffers bufs
           :primary-mode mode

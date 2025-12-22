@@ -553,6 +553,37 @@
               (null section)
               "no eval returns nil")))
 
+(defun test-skill-binding ()
+  "Test: Skill binding to threads (IMP-023)."
+  (message "\n--- Test: Skill Binding ---")
+  (require 'agent-skills)
+
+  ;; Test core excluded from available skills
+  (test-log "skill-list-excludes-core"
+            (not (member "core" (agent-list-available-skills)))
+            "core not in available list")
+
+  ;; Test thread has bound-skills field
+  (let ((thread (agent-get-active-thread)))
+    (test-log "thread-has-bound-skills"
+              (plist-member thread :bound-skills)
+              "thread has :bound-skills field"))
+
+  ;; Test binding nonexistent skill errors
+  (let ((error-caught nil))
+    (condition-case _err
+        (agent-bind-skill-to-thread "nonexistent-skill-xyz")
+      (error (setq error-caught t)))
+    (test-log "bind-nonexistent-errors"
+              error-caught
+              "binding nonexistent skill errors"))
+
+  ;; Test load-thread-skills returns nil with no skills bound
+  (let ((section (agent--load-thread-skills)))
+    (test-log "no-skills-no-section"
+              (null section)
+              "no bound skills returns nil")))
+
 ;;; Run All Tests
 
 (defun test-run-all ()
@@ -583,6 +614,7 @@
         (test-json-parsing)
         (test-eval-execution)
         (test-context-integration)
+        (test-skill-binding)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -617,6 +649,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-json-parsing)
           (test-eval-execution)
           (test-context-integration)
+          (test-skill-binding)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))

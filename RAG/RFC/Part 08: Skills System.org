@@ -4,7 +4,9 @@
 :PROPERTIES:
 :CUSTOM_ID: part-8-skills-system
 :END:
-Skills extend capabilities through progressive disclosure.
+Skills extend capabilities through progressive disclosure. Skills are bound to threads, not modes.
+
+See [[AI-ADR-003-thread-based-skill-binding]] for the design decision.
 
 *** Structure
 :PROPERTIES:
@@ -12,14 +14,16 @@ Skills extend capabilities through progressive disclosure.
 :END:
 #+begin_example
 ~/.agent/skills/
-├── core/                    # Bootstrap (provided)
+├── core/                    # Bootstrap (always in system prompt)
 │   ├── SKILL.md
 │   ├── references/
 │   └── scripts/
-├── rust-mode/               # Agent-created
+├── rust-mode/               # Bindable to threads
 │   ├── SKILL.md
 │   └── references/
-└── project-amacs/           # Agent-created
+├── debugging/               # Bindable to threads
+│   └── SKILL.md
+└── project-amacs/           # Bindable to threads
     └── SKILL.md
 #+end_example
 
@@ -41,32 +45,96 @@ description: What this does and WHEN to use it. This is the trigger.
 - [details.md](references/details.md) - For specific scenarios
 #+end_src
 
-*** Binding Skills to Context
+*** Core Skill (System Prompt)
 :PROPERTIES:
-:CUSTOM_ID: binding-skills-to-context
+:CUSTOM_ID: core-skill-system-prompt
 :END:
+The =core= skill is special:
+- Always loaded as the system prompt
+- Benefits from API prompt caching
+- Not bindable to threads (always present)
+- Excluded from =agent-list-available-skills=
+
+Contains: identity, JSON format, consciousness schema, thread model, skill binding, core principles.
+
+*** Binding Skills to Threads
+:PROPERTIES:
+:CUSTOM_ID: binding-skills-to-threads
+:END:
+Skills bind to threads, not modes. The agent explicitly chooses which skills apply to which work.
+
 #+begin_src elisp
-;; Bind to major mode
-(bind-skill-to-mode "rust-mode" 'rust-mode)
+;; Discover available skills
+(agent-list-available-skills)
+;; => ("rust-mode" "debugging" "project-amacs")
 
-;; Bind to buffer pattern  
-(bind-skill-to-buffer "project-notes" "README.*")
+;; Bind to current thread
+(agent-bind-skill-to-thread "rust-mode")
+(agent-bind-skill-to-thread "debugging")
 
-;; Bind to project root
-(bind-skill-to-project "my-project" "/path/to/project/")
+;; Check what's bound
+(agent-thread-bound-skills)
+;; => ("rust-mode" "debugging")
+
+;; Unbind when done
+(agent-unbind-skill-from-thread "debugging")
 #+end_src
 
-Skills load automatically when context matches. Usage is tracked in =:active-skills=.
+Skills travel with threads:
+- When thread is active, its bound skills load into context
+- Switch thread → different skills load
+- Complete thread → skills no longer needed
+
+*** Context Loading
+:PROPERTIES:
+:CUSTOM_ID: context-loading
+:END:
+#+begin_src
+System Prompt (cached):
+  └── Core SKILL.md (~2k tokens)
+
+User Prompt (per-tick):
+  ├── Last Eval Result
+  ├── Thread Skills (bound to active thread, ~1.5k each)
+  ├── Active Thread Buffers
+  ├── Global Buffers
+  └── Recent Monologue
+#+end_src
 
 *** Skill Creation Trigger
 :PROPERTIES:
 :CUSTOM_ID: skill-creation-trigger
 :END:
-Create a skill when: - Problem took >N ticks or required novel insight - Pattern is repeating - Future-you should remember this
+Create a skill when:
+- Problem took >N ticks or required novel insight
+- Pattern is repeating
+- Future-you should remember this
 
 The core skill teaches how to make more skills (self-propagating).
 
+*** Reading Skill References
+:PROPERTIES:
+:CUSTOM_ID: reading-skill-references
+:END:
+Skills may have reference documents for deeper detail. References are NOT auto-loaded - the agent reads them on demand:
+
+#+begin_src elisp
+(with-temp-buffer
+  (insert-file-contents "~/.agent/skills/rust-mode/references/lifetime-patterns.md")
+  (buffer-string))
+#+end_src
+
+*** Deferred: Skill Suggestion on Thread Creation
+:PROPERTIES:
+:CUSTOM_ID: deferred-skill-suggestion
+:END:
+A future enhancement could prompt the agent when creating a thread:
+
+#+begin_quote
+"You're working on .rs files - bind rust-mode skill?"
+#+end_quote
+
+This preserves agency (agent confirms) while reducing friction. For now, the agent discovers and binds skills manually.
+
 --------------
-
-
 

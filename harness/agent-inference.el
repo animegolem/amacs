@@ -26,8 +26,8 @@
 (require 'agent-api)
 (require 'agent-tick)
 
-;; Forward declarations for variables/functions defined in agent-core
-;; (can't require agent-core due to circular dependency)
+;; Forward declarations to avoid circular requires
+(declare-function agent--load-thread-skills "agent-skills")
 (defvar agent-initialized)
 (declare-function agent-init "agent-core")
 (declare-function agent-load-config "agent-core")
@@ -139,6 +139,10 @@ Returns nil if no eval or eval was skipped."
     ;; Last eval result (most immediate context) - IMP-019
     (when-let* ((eval-section (agent--format-last-eval-for-prompt)))
       (push eval-section sections))
+
+    ;; Thread-bound skills - IMP-023
+    (when-let* ((skills-section (agent--load-thread-skills)))
+      (push skills-section sections))
 
     ;; Active thread buffers
     (when (and active (plist-get active :buffers))

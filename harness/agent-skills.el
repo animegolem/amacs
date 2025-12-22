@@ -82,12 +82,14 @@ BUFFER-PATTERN is a regexp matched against buffer names."
   (file-exists-p (agent-get-skill-path skill-name)))
 
 (defun agent-list-available-skills ()
-  "Return list of all available skill names."
+  "Return list of available skill names (excludes core).
+Core skill is always in system prompt, not bindable to threads."
   (let ((dir (expand-file-name agent-skills-directory)))
     (when (file-directory-p dir)
       (seq-filter
        (lambda (name)
-         (and (file-directory-p (expand-file-name name dir))
+         (and (not (equal name "core"))  ; Exclude core
+              (file-directory-p (expand-file-name name dir))
               (not (string-prefix-p "." name))
               (file-exists-p (agent-get-skill-path name))))
        (directory-files dir)))))
@@ -118,6 +120,66 @@ Returns the content as a string, or nil if skill doesn't exist."
           (insert-file-contents ref-path)
           (buffer-string))
       nil)))
+
+;;; Thread-Based Skill Binding (IMP-023)
+
+(declare-function agent-get-thread "agent-threads")
+(declare-function agent--update-thread "agent-threads")
+
+(defun agent-thread-bound-skills (&optional thread-id)
+  "Return list of skills bound to THREAD-ID (default: active thread)."
+  (let ((thread (agent-get-thread (or thread-id (agent-get :active-thread)))))
+    (plist-get thread :bound-skills)))
+
+(defun agent-bind-skill-to-thread (skill-name &optional thread-id)
+  "Bind SKILL-NAME to THREAD-ID (default: active thread).
+The skill's SKILL.md will load in context while this thread is active."
+  (let* ((tid (or thread-id (agent-get :active-thread)))
+         (thread (agent-get-thread tid))
+         (current-skills (or (plist-get thread :bound-skills) '())))
+    (unless tid
+      (error "No active thread to bind skill to"))
+    (unless (member skill-name (agent-list-available-skills))
+      (error "Skill '%s' not found in ~/.agent/skills/" skill-name))
+    (unless (member skill-name current-skills)
+      (agent--update-thread tid
+        (list :bound-skills (cons skill-name current-skills))))
+    (format "Bound skill '%s' to thread '%s'" skill-name tid)))
+
+(defun agent-unbind-skill-from-thread (skill-name &optional thread-id)
+  "Unbind SKILL-NAME from THREAD-ID (default: active thread)."
+  (let* ((tid (or thread-id (agent-get :active-thread)))
+         (thread (agent-get-thread tid))
+         (current-skills (plist-get thread :bound-skills)))
+    (unless tid
+      (error "No active thread to unbind skill from"))
+    (agent--update-thread tid
+      (list :bound-skills (remove skill-name current-skills)))
+    (format "Unbound skill '%s' from thread '%s'" skill-name tid)))
+
+(defun agent--load-skill-content (skill-name)
+  "Load SKILL.md content for SKILL-NAME. Returns string or nil."
+  (let ((skill-path (agent-get-skill-path skill-name)))
+    (when (file-exists-p skill-path)
+      (with-temp-buffer
+        (insert-file-contents skill-path)
+        (buffer-string)))))
+
+(defun agent--load-thread-skills ()
+  "Load all skills bound to active thread. Returns formatted string or nil."
+  (let* ((skills (agent-thread-bound-skills))
+         (skill-contents
+          (seq-filter #'cdr
+            (mapcar (lambda (skill)
+                      (cons skill (agent--load-skill-content skill)))
+                    skills))))
+    (when skill-contents
+      (format "## Thread Skills\n\n%s"
+              (mapconcat
+               (lambda (pair)
+                 (format "### %s\n\n%s" (car pair) (cdr pair)))
+               skill-contents
+               "\n\n---\n\n")))))
 
 ;;; Context-Based Skill Resolution
 
