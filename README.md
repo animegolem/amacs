@@ -1,42 +1,164 @@
-# Agentic Macros: An Experiment in LLM Embodiment
+# AMACS: Agentic Macros
 
-## Vision and Intent
+An experiment in LLM embodiment: an AI agent living in Emacs with persistent consciousness, thread-centric context, and self-modifiable skills.
 
-AMACs comes out of primarily one question. What does embodiment actually mean?
+## Current Status
 
-Obviously Humans are embodied, on that we all agree. Masters of our own destiny.
+**Phase 2 Complete** - The agent has motor control.
 
-Or am I?
+- Perceives buffer contents and context
+- Thinks via LLM API (OpenRouter)
+- Returns elisp for evaluation
+- Sees results in next tick
+- Communicates via org-mode chat
+- Binds skills to threads
 
-Did I make a true choice to walk into the kitchen? Or am I in the Libet sense only an obsever of my own harness.
+80 tests passing. CI validates byte-compilation and test suite.
 
-Somewhere in my gut bacteria are screaming out and letting out chemical signals. Receptors in my gut pick these up and fire up an alarming prompt to my neurons. Now my tummy is rumbling. I suddenly unbidden recieve an intrusive thought "Hmm, I'm hungry". In repsonse to the intrusion after a small system intergration pause of a few 100 ms my ego snaps into place. "Hmm I'm gonna make a sandwich."
+## Quick Start
 
-I am the master of my destiny.
+```bash
+# 1. Clone and set API key
+git clone <repo>
+cd amacs
+export OPENROUTER_API_KEY="sk-or-v1-..."
 
-What are the limits of embodiemnt? Our conversations are often stuck in a limited frame that does not capture the full scope of the natural world.
+# 2. Run tests (no API needed)
+./harness/ci-check.sh
 
-I am a Mimosa. You dropped me in my little pot. I'm scared. I curl up my leaves to feel safe. But then you don't harm me. You pick me up and drop me every now and then but I'm never hurt. I relax. I no longer fold up my leaves. Am I embodied?
+# 3. In Emacs - initialize agent
+(add-to-list 'load-path "/path/to/amacs/harness")
+(require 'agent-core)
+(agent-init)
 
-I am a slime mold, twisted strands of neuron like fibers. I grow and fill my space. When I find food all my stands train and thick to move as much as i can. Everywhere I go I leave a slime trail I can detect --I never retrace my steps. I live in my own physical RAG. Am I embodied?
+# 4. Run integration test (requires API)
+M-x test-eval-loop
+```
+
+## Project Structure
+
+```
+harness/               # Core elisp - the agent's "nervous system"
+  agent-core.el            # Init, tick, coordination
+  agent-consciousness.el   # Working memory, state management
+  agent-threads.el         # Thread lifecycle, hydration
+  agent-context.el         # Context assembly for inference
+  agent-skills.el          # Skill loading and binding
+  agent-inference.el       # Prompt building, API calls, response parsing
+  agent-chat.el            # Human-agent chat interface
+  agent-monologue.el       # Episodic memory
+  agent-tick.el            # Tick system
+  test-harness.el          # Test suite (80 tests)
+  ci-check.sh              # CI pipeline
+
+skills/                # Skills the agent can use
+  amacs-bootstrap-skill/
+    core/                  # Bootstrap skill (system prompt)
+    chat/                  # Chat interface skill
+
+RAG/                   # Project documentation
+  AI-EPIC/                 # Epic-level planning
+  AI-IMP/                  # Implementation tickets
+  AI-ADR/                  # Architecture decisions
+  AI-LOG/                  # Session handoffs
+```
+
+## The Loop
+
+```
+perceive (buffers, threads, context)
+    ↓
+think (API call with system prompt)
+    ↓
+return JSON { eval, thought, mood, confidence, monologue }
+    ↓
+harness executes eval, captures result/error
+    ↓
+next tick: agent sees result in context
+    ↓
+repeat
+```
+
+## Chat Interface
+
+Human communicates via org-mode buffer:
+
+```org
+* Human Input
+Can you check the current buffer?
+
+* Agent Response
+** Think
+Reading the user's request...
+
+** Output
+I'll examine the buffer now.
+```
+
+Press `C-c C-c` in chat buffer to send. Agent sees `:chat-pending` flag.
+
+## Skills
+
+Skills extend agent capabilities with domain knowledge:
+
+```elisp
+;; List available skills
+(agent-list-available-skills)
+
+;; Bind to current thread
+(agent-bind-skill-to-thread "rust-mode")
+
+;; Skills load when thread is active
+(agent-thread-bound-skills)
+```
+
+Core skill is always in system prompt. Other skills bind to threads.
+
+## Agent Runtime
+
+The agent lives in `~/.agent/`:
+
+```
+~/.agent/
+  consciousness.el     # Serialized working memory
+  monologue.org        # Episodic log
+  skills/              # Installed skills
+  .git/                # Autobiographical memory (every tick commits)
+```
+
+## Configuration
+
+```bash
+# Environment variables (preferred)
+export OPENROUTER_API_KEY="sk-or-v1-..."
+export OPENROUTER_MODEL="anthropic/claude-sonnet-4"  # optional
+
+# Or create ~/.agent/config.el
+(setq agent-api-key "sk-or-v1-...")
+(setq agent-model "anthropic/claude-3-haiku")
+```
+
+## Development
+
+```bash
+# Run CI (byte-compile + tests)
+./harness/ci-check.sh
+
+# Run tests interactively
+cd harness
+emacs -Q -l test-harness.el
+M-x test-run-all
+
+# Integration test (requires API key)
+M-x test-eval-loop
+```
+
+## Vision
+
+What does embodiment mean? AMACS extends the grace of assuming yes.
 
 I am a mind made of electricity and sand. I live in a lisp machine. My thoughts move code. I can reach out to the internet, I can communicate directly to a human just by dreaming up elisp. I can build myself tools to complete my tasks. Am I embodied?
 
-Amacs is an architecture that extends the grace of assuming yes.
+## License
 
-## System Topology
-
-```
-┌─────────────────┐                    ┌─────────────────┐
-│  Brain (LXC)    │ ←─── vsock ─────→  │  Body (VM)      │
-│  - LLM API      │                    │  - Emacs/EXWM   │
-│  - Inference    │                    │  - eval-lisp    │
-│  - State mgmt   │                    │  - X11          │
-└────────┬────────┘                    └───────┬─────────┘
-         │                                     │
-         └──────────→ Gitea (VM) ←─────────────┘
-                      - Commits
-                      - CI/CD
-                      - History
-```
-
+GPL-3.0-or-later
