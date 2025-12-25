@@ -7,8 +7,8 @@ tags:
   - remediation
   - field-test
 date_created: 2025-12-24
-date_completed: 
-kanban-status: planned
+date_completed: 2025-12-25
+kanban-status: complete
 AI_IMP_spawned: 
   - AI-IMP-025
   - AI-IMP-026
@@ -89,10 +89,10 @@ Remove 4000 char truncation. Include full consciousness state. Agent controls co
 
 | IMP | Title | Status | Dependencies |
 |-----|-------|--------|--------------|
-| AI-IMP-025 | Alist Migration | planned | none |
-| AI-IMP-026 | Mode-Based Discovery + Scratchpad | planned | IMP-025 |
-| AI-IMP-027 | Chat Interface Redesign | planned | IMP-026 |
-| AI-IMP-028 | Context Assembly + Skill Init | planned | IMP-025, IMP-026 |
+| AI-IMP-025 | Alist Migration | complete | none |
+| AI-IMP-026 | Mode-Based Discovery + Scratchpad | complete | IMP-025 |
+| AI-IMP-027 | Chat Interface Redesign | complete | IMP-026 |
+| AI-IMP-028 | Context Assembly + Skill Init | complete | IMP-025, IMP-026 |
 
 **Dependency Graph:**
 ```

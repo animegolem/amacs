@@ -4,13 +4,18 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;; Commentary:
-;; 
+;;
 ;; Defines and manages the agent-consciousness variable - the agent's working
 ;; memory that persists across ticks. This is the core state that makes the
 ;; agent "itself" between inference calls.
 ;;
+;; Uses alist format with symbol keys for clean access patterns:
+;;   (alist-get 'mood agent-consciousness)
+;;   (setf (alist-get 'mood agent-consciousness) "focused")
+;;
 ;; See: amacs-rfc-v3.md Part 6 (Consciousness Variable)
 ;;      skills/amacs-bootstrap-skill/core/references/consciousness-schema.md
+;;      STYLE.md (alist conventions)
 
 ;;; Code:
 
@@ -20,8 +25,9 @@
 
 (defvar agent-consciousness nil
   "The agent's working memory. Persists across ticks.
-This plist contains all state the agent needs to maintain identity
-and continuity. See `agent-init-consciousness' for full schema.")
+This alist contains all state the agent needs to maintain identity
+and continuity. Uses symbol keys for clean alist-get access.
+See `agent-init-consciousness' for full schema.")
 
 (defvar agent-consciousness-file "~/.agent/consciousness.el"
   "File where consciousness is persisted between sessions.")
@@ -32,48 +38,56 @@ and continuity. See `agent-init-consciousness' for full schema.")
 ;;; Schema Definition
 
 (defun agent--default-consciousness ()
-  "Return a fresh consciousness plist with default values."
-  `(:identity ,agent-identity
-    
-    ;; Temporal
-    :current-tick 0
-    :current-time ,(format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t)
-    :last-inference-time nil
-    :long-gap-detected nil
-    
-    ;; Affective
-    :mood :awakening
-    :confidence 0.5
-    
-    ;; Threads
-    :active-thread nil
-    :thread-budget 3
-    :open-threads ()
-    :completed-threads ()
-    
-    ;; Action history
-    :last-actions ()
-    
-    ;; Context (thread-centric: buffers owned by threads, not global)
-    :global-buffers ("*agent-chat*")  ; Always-active buffers (human interface)
-    :focus nil
-    
-    ;; Memory pointers
-    :last-commit nil
-    :recent-monologue ("Consciousness initialized.")
-    
-    ;; Skills
-    :active-skills ()
-    
-    ;; Human interaction
-    :human-review-requested nil
-    :chat-pending nil
+  "Return a fresh consciousness alist with default values.
+Uses symbol keys for clean alist-get access patterns."
+  `((identity . ,agent-identity)
 
-    ;; Budget
-    :budget (:cost-so-far 0.0
-             :budget-limit 5.0
-             :inference-count 0
-             :pressure :low)))
+    ;; Temporal
+    (current-tick . 0)
+    (current-time . ,(format-time-string "%Y-%m-%dT%H:%M:%SZ" nil t))
+    (last-inference-time . nil)
+    (long-gap-detected . nil)
+
+    ;; Affective
+    (mood . "awakening")
+    (confidence . 0.5)
+
+    ;; Threads
+    (active-thread . nil)
+    (thread-budget . 3)
+    (open-threads . ())
+    (completed-threads . ())
+
+    ;; Action history
+    (last-actions . ())
+
+    ;; Context (thread-centric: buffers owned by threads, not global)
+    (global-buffers . ("*agent-chat*"))
+    (focus . nil)
+
+    ;; Memory pointers
+    (last-commit . nil)
+    (recent-monologue . ("Consciousness initialized."))
+
+    ;; Skills
+    (active-skills . ())
+
+    ;; Human interaction
+    (human-review-requested . nil)
+    (chat-pending . nil)
+
+    ;; Eval tracking
+    (last-eval-result . nil)
+
+    ;; Budget (nested alist)
+    (budget . ((cost-so-far . 0.0)
+               (budget-limit . 5.0)
+               (inference-count . 0)
+               (pressure . low)))
+
+    ;; Context depth controls (agent can adjust these)
+    (chat-context-depth . 5)
+    (monologue-context-depth . 20)))
 
 ;;; Persistence
 
@@ -105,13 +119,22 @@ Called automatically at end of each tick."
 
 ;;; Accessors
 
-(defun agent-get (key)
-  "Get KEY from consciousness."
-  (plist-get agent-consciousness key))
+(defun agent--normalize-key (key)
+  "Convert KEY to symbol for alist access.
+Accepts keywords (:foo) or symbols (foo), returns symbol."
+  (if (keywordp key)
+      (intern (substring (symbol-name key) 1))
+    key))
+
+(defun agent-get (key &optional default)
+  "Get KEY from consciousness, with optional DEFAULT.
+KEY can be a keyword (:foo) or symbol (foo)."
+  (alist-get (agent--normalize-key key) agent-consciousness default))
 
 (defun agent-set (key value)
-  "Set KEY to VALUE in consciousness. Returns VALUE."
-  (setq agent-consciousness (plist-put agent-consciousness key value))
+  "Set KEY to VALUE in consciousness. Returns VALUE.
+KEY can be a keyword (:foo) or symbol (foo)."
+  (setf (alist-get (agent--normalize-key key) agent-consciousness) value)
   value)
 
 ;;; Initialization
@@ -185,12 +208,12 @@ Sets :long-gap-detected if gap > 1 hour. Returns gap in seconds or nil."
   "Record an action with its confidence score.
 Maintains a rolling window of last 20 actions."
   (let* ((current-tick (agent-current-tick))
-         (action-record `(:tick ,current-tick 
-                          :action ,action-name 
-                          :confidence ,confidence))
-         (last-actions (agent-get :last-actions))
+         (action-record `((tick . ,current-tick)
+                          (action . ,action-name)
+                          (confidence . ,confidence)))
+         (last-actions (agent-get 'last-actions))
          (updated (cons action-record (seq-take last-actions 19))))
-    (agent-set :last-actions updated)
+    (agent-set 'last-actions updated)
     (agent-set-confidence confidence)
     action-record))
 
@@ -224,19 +247,19 @@ Maintains a rolling window of last 20 actions."
 
 (defun agent-request-human-review (reason)
   "Request human review with REASON."
-  (agent-set :human-review-requested
-             `(:requested t
-               :reason ,reason
-               :requested-at-tick ,(agent-current-tick)))
+  (agent-set 'human-review-requested
+             `((requested . t)
+               (reason . ,reason)
+               (requested-at-tick . ,(agent-current-tick))))
   (message "HUMAN REVIEW REQUESTED: %s" reason))
 
 (defun agent-clear-human-review ()
   "Clear the human review request."
-  (agent-set :human-review-requested nil))
+  (agent-set 'human-review-requested nil))
 
 (defun agent-human-review-pending-p ()
   "Return t if a human review is pending."
-  (plist-get (agent-get :human-review-requested) :requested))
+  (alist-get 'requested (agent-get 'human-review-requested)))
 
 (provide 'agent-consciousness)
 ;;; agent-consciousness.el ends here

@@ -61,11 +61,11 @@
   "Build system prompt from core skill content with current state."
   (let* ((core-skill (agent--load-core-skill))
          (active-thread (agent-get-active-thread))
-         (thread-id (or (plist-get active-thread :id) "none"))
-         (concern (or (plist-get active-thread :concern) "No active concern")))
+         (thread-id (or (alist-get 'id active-thread) "none"))
+         (concern (or (alist-get 'concern active-thread) "No active concern")))
     (format "%s\n\n---\n## Current State\n- Identity: %s\n- Tick: %d\n- Mood: %s\n- Confidence: %.2f\n- Active Thread: %s\n- Concern: %s"
             core-skill
-            (or (agent-get :identity) "amacs")
+            (or (agent-get 'identity) "amacs")
             (agent-current-tick)
             (or (agent-mood) "awakening")
             (agent-confidence)
@@ -80,60 +80,54 @@
     (concat (car parts)
             (mapconcat #'capitalize (cdr parts) ""))))
 
-(defun agent--plist-to-json-alist (plist)
-  "Convert PLIST to alist with camelCase keys for JSON encoding."
-  (let ((result '()))
-    (while plist
-      (let* ((key (pop plist))
-             (val (pop plist))
-             (key-name (if (keywordp key)
-                           (substring (symbol-name key) 1)  ; remove :
-                         (symbol-name key)))
-             (json-key (agent--kebab-to-camel key-name)))
-        (push (cons json-key val) result)))
-    (nreverse result)))
+(defun agent--alist-to-json-alist (alist)
+  "Convert ALIST with symbol keys to alist with camelCase string keys.
+Suitable for JSON encoding with clean JavaScript-style keys."
+  (mapcar (lambda (pair)
+            (let* ((key (car pair))
+                   (key-name (symbol-name key))
+                   (json-key (agent--kebab-to-camel key-name)))
+              (cons json-key (cdr pair))))
+          alist))
 
 (defun agent--format-last-eval-for-prompt ()
-  "Format :last-eval-result for inclusion in user prompt.
+  "Format last-eval-result for inclusion in user prompt.
 Returns nil if no eval or eval was skipped."
-  (when-let* ((last-eval (agent-get :last-eval-result)))
-    (unless (plist-get last-eval :skipped)
-      (let* ((tick (plist-get last-eval :tick))
-             (json-alist (agent--plist-to-json-alist last-eval)))
+  (when-let* ((last-eval (agent-get 'last-eval-result)))
+    (unless (alist-get 'skipped last-eval)
+      (let* ((tick (alist-get 'tick last-eval))
+             (json-alist (agent--alist-to-json-alist last-eval)))
         (format "## Last Eval Result (tick %d)\n```json\n%s\n```"
                 (or tick 0)
                 (json-encode json-alist))))))
 
 ;;; User Prompt (Context)
 
-(defun agent--format-buffer-for-prompt (buffer-plist)
-  "Format a hydrated BUFFER-PLIST for inclusion in prompt."
-  (let ((name (plist-get buffer-plist :name))
-        (content (plist-get buffer-plist :content))
-        (mode (plist-get buffer-plist :mode)))
+(defun agent--format-buffer-for-prompt (buffer-alist)
+  "Format a hydrated BUFFER-ALIST for inclusion in prompt.
+No truncation - trust the LLM's token budget to handle large buffers."
+  (let ((name (alist-get 'name buffer-alist))
+        (content (alist-get 'content buffer-alist))
+        (mode (alist-get 'mode buffer-alist)))
     (if (and content (> (length content) 0))
-        (format "=== %s (%s) ===\n%s\n"
-                name mode
-                (if (> (length content) 4000)
-                    (concat (substring content 0 4000) "\n... [truncated]")
-                  content))
+        (format "=== %s (%s) ===\n%s\n" name mode content)
       (format "=== %s (%s) === [empty]\n" name mode))))
 
 (defun agent--format-thread-for-prompt (thread-summary)
   "Format a THREAD-SUMMARY for the pending threads section."
   (format "- [%s] %s (started tick %d)"
-          (plist-get thread-summary :id)
-          (or (plist-get thread-summary :concern) "unnamed")
-          (or (plist-get thread-summary :started-tick) 0)))
+          (alist-get 'id thread-summary)
+          (or (alist-get 'concern thread-summary) "unnamed")
+          (or (alist-get 'started-tick thread-summary) 0)))
 
 (defun agent-build-user-prompt ()
   "Build the user prompt from current context."
   (let* ((ctx (agent-build-context))
-         (active (plist-get ctx :active-thread))
-         (pending (plist-get ctx :pending-threads))
-         (global-bufs (plist-get ctx :global-buffers))
-         (monologue (plist-get ctx :recent-monologue))
-         (last-actions (plist-get ctx :last-actions))
+         (active (alist-get 'active-thread ctx))
+         (pending (alist-get 'pending-threads ctx))
+         (global-bufs (alist-get 'global-buffers ctx))
+         (monologue (alist-get 'recent-monologue ctx))
+         (last-actions (alist-get 'last-actions ctx))
          (sections '()))
 
     ;; Last eval result (most immediate context) - IMP-019
@@ -145,10 +139,10 @@ Returns nil if no eval or eval was skipped."
       (push skills-section sections))
 
     ;; Active thread buffers
-    (when (and active (plist-get active :buffers))
+    (when (and active (alist-get 'buffers active))
       (push (format "## Active Thread Buffers\n%s"
                     (mapconcat #'agent--format-buffer-for-prompt
-                               (plist-get active :buffers) "\n"))
+                               (alist-get 'buffers active) "\n"))
             sections))
 
     ;; Global buffers (if any have content)
@@ -163,10 +157,10 @@ Returns nil if no eval or eval was skipped."
                     (mapconcat #'agent--format-thread-for-prompt pending "\n"))
             sections))
 
-    ;; Recent monologue
+    ;; Recent monologue (depth controlled by monologue-context-depth in consciousness)
     (when monologue
       (push (format "## Recent Monologue\n%s"
-                    (mapconcat #'identity (seq-take monologue 10) "\n"))
+                    (mapconcat #'identity monologue "\n"))
             sections))
 
     ;; Last actions
@@ -175,9 +169,9 @@ Returns nil if no eval or eval was skipped."
                     (mapconcat
                      (lambda (act)
                        (format "- Tick %d: %s (confidence %.2f)"
-                               (plist-get act :tick)
-                               (plist-get act :action)
-                               (plist-get act :confidence)))
+                               (alist-get 'tick act)
+                               (alist-get 'action act)
+                               (alist-get 'confidence act)))
                      (seq-take last-actions 5) "\n"))
             sections))
 
@@ -233,18 +227,18 @@ On parse failure, returns fallback values with :parse-success nil."
 (defun agent--update-budget (usage)
   "Update budget tracking with USAGE from API response."
   (let* ((cost (agent-estimate-cost usage))
-         (budget (agent-get :budget))
-         (new-cost (+ (or (plist-get budget :cost-so-far) 0) (or cost 0)))
-         (new-count (1+ (or (plist-get budget :inference-count) 0)))
-         (limit (or (plist-get budget :budget-limit) 5.0)))
-    (agent-set :budget
-               (list :cost-so-far new-cost
-                     :budget-limit limit
-                     :inference-count new-count
-                     :pressure (cond ((> new-cost (* 0.9 limit)) :critical)
-                                     ((> new-cost (* 0.75 limit)) :high)
-                                     ((> new-cost (* 0.5 limit)) :moderate)
-                                     (t :low))))))
+         (budget (agent-get 'budget))
+         (new-cost (+ (or (alist-get 'cost-so-far budget) 0) (or cost 0)))
+         (new-count (1+ (or (alist-get 'inference-count budget) 0)))
+         (limit (or (alist-get 'budget-limit budget) 5.0)))
+    (agent-set 'budget
+               `((cost-so-far . ,new-cost)
+                 (budget-limit . ,limit)
+                 (inference-count . ,new-count)
+                 (pressure . ,(cond ((> new-cost (* 0.9 limit)) 'critical)
+                                    ((> new-cost (* 0.75 limit)) 'high)
+                                    ((> new-cost (* 0.5 limit)) 'moderate)
+                                    (t 'low)))))))
 
 (defun agent-process-response (response)
   "Process API RESPONSE and update consciousness.
@@ -284,46 +278,47 @@ Returns parsed response plist with :eval, :thought, :mood, etc."
 
 (defun agent-eval (elisp-string)
   "Evaluate ELISP-STRING, capturing result or error.
-Returns plist with :success, :result, :error, :skipped."
+Returns alist with success, result, error, skipped."
   (if (or (null elisp-string)
           (and (stringp elisp-string)
                (string-empty-p (string-trim elisp-string))))
-      (list :success t :result nil :error nil :skipped t)
+      '((success . t) (result . nil) (error . nil) (skipped . t))
     (condition-case err
         (let* ((form (read elisp-string))
                (result (eval form t)))  ; t = lexical binding
-          (list :success t
-                :result (prin1-to-string result)
-                :error nil
-                :skipped nil))
+          `((success . t)
+            (result . ,(prin1-to-string result))
+            (error . nil)
+            (skipped . nil)))
       (error
-       (list :success nil
-             :result nil
-             :error (error-message-string err)
-             :skipped nil)))))
+       `((success . nil)
+         (result . nil)
+         (error . ,(error-message-string err))
+         (skipped . nil))))))
 
 (defun agent-record-eval (elisp-string eval-result)
   "Record EVAL-RESULT for ELISP-STRING in consciousness."
-  (agent-set :last-eval-result
-             (list :elisp elisp-string
-                   :success (plist-get eval-result :success)
-                   :result (plist-get eval-result :result)
-                   :error (plist-get eval-result :error)
-                   :tick (agent-current-tick))))
+  (agent-set 'last-eval-result
+             `((elisp . ,elisp-string)
+               (success . ,(alist-get 'success eval-result))
+               (result . ,(alist-get 'result eval-result))
+               (error . ,(alist-get 'error eval-result))
+               (skipped . ,(alist-get 'skipped eval-result))
+               (tick . ,(agent-current-tick)))))
 
 (defun agent--format-eval-for-monologue (elisp-string eval-result)
   "Format eval result for monologue entry.
 Returns nil for skipped evals (no logging needed)."
-  (if (plist-get eval-result :skipped)
+  (if (alist-get 'skipped eval-result)
       nil  ; Don't log skipped evals
-    (if (plist-get eval-result :success)
+    (if (alist-get 'success eval-result)
         (format "EVAL: %s => %s"
                 (truncate-string-to-width elisp-string 50 nil nil "...")
                 (truncate-string-to-width
-                 (or (plist-get eval-result :result) "nil") 30 nil nil "..."))
+                 (or (alist-get 'result eval-result) "nil") 30 nil nil "..."))
       (format "EVAL ERROR: %s => %s"
               (truncate-string-to-width elisp-string 50 nil nil "...")
-              (plist-get eval-result :error)))))
+              (alist-get 'error eval-result)))))
 
 ;;; Main Entry Point
 

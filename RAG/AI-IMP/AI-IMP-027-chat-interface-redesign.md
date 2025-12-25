@@ -6,12 +6,12 @@ tags:
   - chat
   - org-mode
   - interface
-kanban_status: planned
-depends_on: 
+kanban_status: complete
+depends_on:
   - AI-IMP-026
 confidence_score: 0.85
 created_date: 2025-12-24
-close_date:
+close_date: 2025-12-25
 --- 
 
 # AI-IMP-027: Chat Interface Redesign
@@ -98,20 +98,20 @@ Agent's response text here
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Add prompt block template to org-tempo or custom expansion
-- [ ] Implement `agent-chat-find-pending-prompt` to locate block
-- [ ] Implement `agent-chat-respond` transformation function
-- [ ] Implement `agent-chat-read-exchanges` to parse tick headings
-- [ ] Update `agent-chat-last-human-input` for new structure
-- [ ] Update `amacs-chat-send` (C-c C-c) for new flow
-- [ ] Update `agent-create-chat-buffer` initial content
-- [ ] Remove old `* Human Input` / `* Agent Response` parsing
-- [ ] Update chat SKILL.md documentation
-- [ ] Update core SKILL.md chat section
-- [ ] Add test for prompt block parsing
-- [ ] Add test for response transformation
-- [ ] Add test for exchange reading
-- [ ] Test with multi-line formatted human input
+- [x] Add prompt block template to org-tempo or custom expansion
+- [x] Implement `agent-chat-find-pending-prompt` to locate block
+- [x] Implement `agent-chat-respond` transformation function
+- [x] Implement `agent-chat-read-exchanges` to parse tick headings
+- [x] Update `agent-chat-last-human-input` for new structure
+- [x] Update `amacs-chat-send` (C-c C-c) for new flow
+- [x] Update `agent-create-chat-buffer` initial content
+- [x] Remove old `* Human Input` / `* Agent Response` parsing
+- [ ] Update chat SKILL.md documentation (deferred - docs when agent uses it)
+- [ ] Update core SKILL.md chat section (deferred - docs when agent uses it)
+- [x] Add test for prompt block parsing
+- [x] Add test for response transformation
+- [x] Add test for exchange reading
+- [x] Test with multi-line formatted human input
 
 ### Acceptance Criteria
 
@@ -142,4 +142,14 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+**Issue: `org-element-map` NO-RECURSION argument prevented finding nested headlines**
+
+When implementing `agent-chat-read-exchanges`, the function was only finding the top-level `* Tick N` headline but not the `** Human Prompt` and `** Agent Response` subheadings.
+
+Root cause: The call `(org-element-map ... 'headline ... nil nil 'headline)` passed `'headline` as the NO-RECURSION argument. This tells org-element-map "when you find a headline, don't look inside it for more headlines". Since subheadings ARE headlines, they were being skipped.
+
+Fix: Remove the NO-RECURSION argument so all headlines at all levels are collected.
+
+**Issue: Unbalanced parentheses from buffer context refactoring**
+
+When fixing the buffer context issue (ensuring `org-element-parse-buffer` runs in the correct buffer), an extra debug message line was removed but the closing paren count wasn't adjusted, leaving the defun unclosed.

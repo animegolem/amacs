@@ -24,6 +24,8 @@
 (require 'agent-skills)
 (require 'agent-threads)
 (require 'agent-context)
+(require 'agent-chat)
+(require 'agent-scratchpad)
 
 ;;; Test Helpers
 
@@ -264,9 +266,9 @@
     (let ((core-entry (assoc "core" active)))
       (test-log "core-skill-tracked"
                 core-entry
-                (if core-entry 
-                    (format "use-count: %d" 
-                            (plist-get (cdr core-entry) :use-count))
+                (if core-entry
+                    (format "use-count: %d"
+                            (alist-get 'use-count (cdr core-entry)))
                   "not found")))))
 
 (defun test-relevant-skills ()
@@ -297,94 +299,121 @@
 (defun test-thread-creation ()
   "Test: Creating a thread captures buffer and mode."
   (message "\n--- Test: Thread Creation ---")
-  
+
   ;; Create a test buffer
   (with-temp-buffer
     (setq-local major-mode 'emacs-lisp-mode)
     (rename-buffer "test-file.el" t)
-    
+
     ;; Create thread from this buffer
     (let ((thread (agent-create-thread "Test concern" '("test-file.el"))))
       (test-log "thread-has-id"
-                (plist-get thread :id)
-                (format "id: %s" (plist-get thread :id)))
-      
+                (alist-get 'id thread)
+                (format "id: %s" (alist-get 'id thread)))
+
       (test-log "thread-has-buffers"
-                (member "test-file.el" (plist-get thread :buffers))
-                (format "buffers: %s" (plist-get thread :buffers)))
-      
+                (member "test-file.el" (alist-get 'buffers thread))
+                (format "buffers: %s" (alist-get 'buffers thread)))
+
       (test-log "thread-has-mode"
-                (plist-get thread :primary-mode)
-                (format "mode: %s" (plist-get thread :primary-mode)))
-      
+                (alist-get 'primary-mode thread)
+                (format "mode: %s" (alist-get 'primary-mode thread)))
+
       (test-log "thread-not-hydrated"
-                (not (plist-get thread :hydrated))
+                (not (alist-get 'hydrated thread))
                 "new threads start dehydrated"))))
 
 (defun test-thread-switching ()
   "Test: Switching threads changes hydration state."
   (message "\n--- Test: Thread Switching ---")
-  
+
   ;; Create and add a new thread
   (let* ((thread (agent-create-thread "Switch test" '("*scratch*")))
-         (thread-id (plist-get thread :id)))
+         (thread-id (alist-get 'id thread)))
     (agent-add-thread thread)
-    
+
     ;; Remember old active
     (let ((old-active (agent-get :active-thread)))
       ;; Switch to new thread
       (agent-switch-thread thread-id)
-      
+
       (test-log "active-thread-changed"
                 (equal (agent-get :active-thread) thread-id)
                 (format "active is now: %s" (agent-get :active-thread)))
-      
+
       ;; Check new thread is hydrated
       (let ((switched-thread (agent-get-thread thread-id)))
         (test-log "new-thread-hydrated"
-                  (plist-get switched-thread :hydrated)
+                  (alist-get 'hydrated switched-thread)
                   "switched thread is hydrated"))
-      
+
       ;; Switch back
       (when old-active
         (agent-switch-thread old-active)))))
 
 (defun test-global-buffers ()
-  "Test: Global buffers are in watched list."
+  "Test: Global buffers discovered by mode."
   (message "\n--- Test: Global Buffers ---")
-  
-  ;; Check *agent-chat* is in global buffers
-  (let ((global (agent-get :global-buffers)))
-    (test-log "agent-chat-global"
-              (member "*agent-chat*" global)
-              (format "global-buffers: %s" global)))
-  
-  ;; Check watched buffers includes global
+
+  ;; Create a chat buffer with mode
+  (let ((chat-buf (agent-create-chat-buffer "*test-mode-chat*")))
+    ;; Check mode is enabled
+    (test-log "chat-mode-enabled"
+              (buffer-local-value 'amacs-chat-mode chat-buf)
+              "chat buffer has amacs-chat-mode")
+
+    ;; Check discovered by mode
+    (let ((global (agent-get-global-buffers)))
+      (test-log "chat-discovered-by-mode"
+                (member "*test-mode-chat*" global)
+                (format "global-buffers: %s" global)))
+
+    ;; Kill the test buffer
+    (kill-buffer chat-buf))
+
+  ;; Check scratchpad was created and discovered
+  (test-log "scratchpad-exists"
+            (file-exists-p (expand-file-name "~/.agent/scratchpad.org"))
+            "scratchpad file exists")
+
+  (let ((scratch-buf (get-file-buffer
+                      (expand-file-name "~/.agent/scratchpad.org"))))
+    (test-log "scratchpad-mode-enabled"
+              (and scratch-buf
+                   (buffer-local-value 'agent-scratchpad-mode scratch-buf))
+              "scratchpad has agent-scratchpad-mode")
+
+    (let ((global (agent-get-global-buffers)))
+      (test-log "scratchpad-discovered-by-mode"
+                (member (buffer-name scratch-buf) global)
+                (format "global includes scratchpad: %s" global))))
+
+  ;; Check watched buffers includes discovered buffers
   (let ((watched (agent-get-watched-buffer-names)))
-    (test-log "watched-includes-global"
-              (member "*agent-chat*" watched)
+    (test-log "watched-includes-discovered"
+              (> (length watched) 0)
               (format "watched: %s" watched))))
 
 (defun test-context-assembly ()
   "Test: Context assembly produces expected structure."
   (message "\n--- Test: Context Assembly ---")
-  
+
   (let ((ctx (agent-build-context)))
     (test-log "context-has-consciousness"
-              (plist-get ctx :consciousness)
-              "has :consciousness")
-    
+              (alist-get 'consciousness ctx)
+              "has consciousness")
+
     (test-log "context-has-active-thread"
-              (plist-get ctx :active-thread)
-              "has :active-thread")
-    
+              (alist-get 'active-thread ctx)
+              "has active-thread")
+
     (test-log "context-has-pending-threads"
-              (listp (plist-get ctx :pending-threads))
-              "has :pending-threads list")
-    
+              (listp (alist-get 'pending-threads ctx))
+              "has pending-threads list")
+
     (test-log "context-has-global-buffers"
-              (listp (plist-get ctx :global-buffers))
-              "has :global-buffers list")))
+              (listp (alist-get 'global-buffers ctx))
+              "has global-buffers list")))
 
 ;;; IMP-017 Tests: JSON Response Protocol
 
@@ -440,43 +469,43 @@
   ;; Test simple expression
   (let ((result (agent-eval "(+ 2 2)")))
     (test-log "eval-simple-success"
-              (plist-get result :success)
+              (alist-get 'success result)
               "simple eval succeeds")
     (test-log "eval-simple-result"
-              (equal (plist-get result :result) "4")
-              (format "result: %s" (plist-get result :result))))
+              (equal (alist-get 'result result) "4")
+              (format "result: %s" (alist-get 'result result))))
 
   ;; Test error capture (undefined function)
   (let ((result (agent-eval "(undefined-function-xyz)")))
     (test-log "eval-error-captured"
-              (not (plist-get result :success))
-              "error eval has :success nil")
+              (not (alist-get 'success result))
+              "error eval has success nil")
     (test-log "eval-error-message"
-              (stringp (plist-get result :error))
-              (format "error: %s" (plist-get result :error))))
+              (stringp (alist-get 'error result))
+              (format "error: %s" (alist-get 'error result))))
 
   ;; Test progn (multi-statement)
   (let ((result (agent-eval "(progn (setq test-var-xyz 1) (+ test-var-xyz 2))")))
     (test-log "eval-progn-success"
-              (plist-get result :success)
+              (alist-get 'success result)
               "progn eval succeeds")
     (test-log "eval-progn-result"
-              (equal (plist-get result :result) "3")
-              (format "result: %s" (plist-get result :result))))
+              (equal (alist-get 'result result) "3")
+              (format "result: %s" (alist-get 'result result))))
 
   ;; Test null eval skips
   (let ((result (agent-eval nil)))
     (test-log "eval-null-skipped"
-              (plist-get result :skipped)
+              (alist-get 'skipped result)
               "null eval is skipped")
     (test-log "eval-null-success"
-              (plist-get result :success)
-              "null eval has :success t"))
+              (alist-get 'success result)
+              "null eval has success t"))
 
   ;; Test empty string skips
   (let ((result (agent-eval "  ")))
     (test-log "eval-empty-skipped"
-              (plist-get result :skipped)
+              (alist-get 'skipped result)
               "empty string eval is skipped"))
 
   ;; Test monologue formatting
@@ -506,18 +535,18 @@
             (equal (agent--kebab-to-camel "eval") "eval")
             "single word unchanged")
 
-  ;; Test plist-to-json-alist
-  (let ((alist (agent--plist-to-json-alist '(:last-eval "test" :my-key 42))))
-    (test-log "plist-to-alist-keys"
+  ;; Test alist-to-json-alist
+  (let ((alist (agent--alist-to-json-alist '((last-eval . "test") (my-key . 42)))))
+    (test-log "alist-to-json-keys"
               (and (assoc "lastEval" alist) (assoc "myKey" alist))
               (format "keys: %s" (mapcar #'car alist)))
-    (test-log "plist-to-alist-values"
+    (test-log "alist-to-json-values"
               (equal (cdr (assoc "myKey" alist)) 42)
               "values preserved"))
 
   ;; Test eval result in prompt (success case)
-  (agent-set :last-eval-result
-             '(:elisp "(+ 2 2)" :success t :result "4" :error nil :tick 5))
+  (agent-set 'last-eval-result
+             '((elisp . "(+ 2 2)") (success . t) (result . "4") (error . nil) (tick . 5)))
   (let ((section (agent--format-last-eval-for-prompt)))
     (test-log "eval-context-exists"
               (and section (string-match "Last Eval Result" section))
@@ -530,8 +559,8 @@
               "tick number in header"))
 
   ;; Test eval error in prompt
-  (agent-set :last-eval-result
-             '(:elisp "(bad)" :success nil :result nil :error "void function" :tick 6))
+  (agent-set 'last-eval-result
+             '((elisp . "(bad)") (success . nil) (result . nil) (error . "void function") (tick . 6)))
   (let ((section (agent--format-last-eval-for-prompt)))
     (test-log "eval-context-error"
               (and section
@@ -540,14 +569,14 @@
               "error shows success:false or null"))
 
   ;; Test skipped eval returns nil
-  (agent-set :last-eval-result '(:skipped t :success t))
+  (agent-set 'last-eval-result '((skipped . t) (success . t)))
   (let ((section (agent--format-last-eval-for-prompt)))
     (test-log "eval-context-skipped-nil"
               (null section)
               "skipped eval returns nil"))
 
   ;; Test no eval result returns nil
-  (agent-set :last-eval-result nil)
+  (agent-set 'last-eval-result nil)
   (let ((section (agent--format-last-eval-for-prompt)))
     (test-log "eval-context-none-nil"
               (null section)
@@ -566,8 +595,8 @@
   ;; Test thread has bound-skills field
   (let ((thread (agent-get-active-thread)))
     (test-log "thread-has-bound-skills"
-              (plist-member thread :bound-skills)
-              "thread has :bound-skills field"))
+              (assoc 'bound-skills thread)
+              "thread has bound-skills field"))
 
   ;; Test binding nonexistent skill errors
   (let ((error-caught nil))
@@ -584,23 +613,75 @@
               (null section)
               "no bound skills returns nil")))
 
+(defun test-context-depth-controls ()
+  "Test: Context depth controls (IMP-028)."
+  (message "\n--- Test: Context Depth Controls ---")
+
+  ;; Test default depth values exist in consciousness
+  (test-log "chat-depth-exists"
+            (numberp (agent-get 'chat-context-depth))
+            (format "chat-context-depth: %s" (agent-get 'chat-context-depth)))
+
+  (test-log "monologue-depth-exists"
+            (numberp (agent-get 'monologue-context-depth))
+            (format "monologue-context-depth: %s" (agent-get 'monologue-context-depth)))
+
+  ;; Test monologue depth is applied in context
+  (let* ((original-depth (agent-get 'monologue-context-depth))
+         (test-monologue '("Line 1" "Line 2" "Line 3" "Line 4" "Line 5")))
+    ;; Set small depth for test
+    (agent-set 'monologue-context-depth 3)
+    (agent-set 'recent-monologue test-monologue)
+    (let* ((ctx (agent-build-context))
+           (mono (alist-get 'recent-monologue ctx)))
+      (test-log "monologue-depth-applied"
+                (= (length mono) 3)
+                (format "monologue limited to %d (depth=3)" (length mono))))
+    ;; Restore
+    (agent-set 'monologue-context-depth original-depth))
+
+  ;; Test consciousness-for-context includes depth controls
+  (let ((consciousness (agent-consciousness-for-context)))
+    (test-log "context-has-chat-depth"
+              (assoc 'chat-context-depth consciousness)
+              "consciousness-for-context has chat-context-depth")
+    (test-log "context-has-mono-depth"
+              (assoc 'monologue-context-depth consciousness)
+              "consciousness-for-context has monologue-context-depth")))
+
+(defun test-bootstrap-skills ()
+  "Test: Bootstrap skills installation (IMP-028)."
+  (message "\n--- Test: Bootstrap Skills ---")
+
+  ;; Test chat skill exists after init
+  ;; (init was already called by warm start test)
+  (test-log "chat-skill-available"
+            (member "chat" (agent-list-available-skills))
+            "chat skill in available list")
+
+  ;; Test chat skill has SKILL.md
+  (test-log "chat-skill-exists"
+            (agent-skill-exists-p "chat")
+            "chat skill SKILL.md exists"))
+
 (defun test-chat-interface ()
-  "Test: Chat interface functions (IMP-022)."
+  "Test: Chat interface functions (IMP-027)."
   (message "\n--- Test: Chat Interface ---")
   (require 'agent-chat)
 
   ;; Test consciousness has chat-pending field
   (test-log "chat-pending-field"
-            (plist-member agent-consciousness :chat-pending)
-            "consciousness has :chat-pending")
+            (assoc 'chat-pending agent-consciousness)
+            "consciousness has chat-pending")
 
   ;; Test chat-pending starts nil
   (test-log "chat-pending-nil"
-            (null (agent-get :chat-pending))
+            (null (agent-get 'chat-pending))
             "chat-pending starts nil")
 
   ;; Test setting chat-pending
-  (agent-set :chat-pending (list :buffer "*test-chat*" :queued-at (current-time)))
+  (agent-set 'chat-pending (list (cons 'buffer "*test-chat*")
+                                  (cons 'queued-at (current-time))))
   (test-log "chat-pending-set"
             (agent-chat-pending-p)
             "agent-chat-pending-p returns t after setting")
@@ -610,7 +691,7 @@
             (equal (agent-chat-buffer-name) "*test-chat*")
             (format "buffer name: %s" (agent-chat-buffer-name)))
 
-  ;; Test creating chat buffer
+  ;; Test creating chat buffer with prompt block
   (let ((buf (agent-create-chat-buffer "*test-amacs-chat*")))
     (test-log "chat-buffer-created"
               (bufferp buf)
@@ -620,10 +701,10 @@
                 (and (derived-mode-p 'org-mode)
                      amacs-chat-mode))
               "buffer has org-mode and amacs-chat-mode")
-    (test-log "chat-buffer-has-header"
+    (test-log "chat-buffer-has-prompt-block"
               (with-current-buffer buf
-                (string-match "AMACS Chat" (buffer-string)))
-              "buffer has title")
+                (string-match "#\\+begin_prompt" (buffer-string)))
+              "buffer has prompt block")
     ;; Clean up
     (kill-buffer buf))
 
@@ -632,6 +713,84 @@
   (test-log "chat-cleared"
             (not (agent-chat-pending-p))
             "chat-pending cleared"))
+
+(defun test-chat-prompt-blocks ()
+  "Test: Prompt block parsing and transformation (IMP-027)."
+  (message "\n--- Test: Prompt Blocks ---")
+
+  ;; Create a test buffer with prompt block
+  (let ((buf (get-buffer-create "*test-prompt-blocks*")))
+    (with-current-buffer buf
+      (org-mode)
+      (amacs-chat-mode 1)
+      (erase-buffer)
+      (insert "#+TITLE: Test\n\n")
+      (insert "#+begin_prompt\nHello agent!\nHow are you?\n#+end_prompt\n"))
+
+    ;; Test finding pending prompt
+    (let ((prompt (agent-chat-find-pending-prompt buf)))
+      (test-log "find-pending-prompt"
+                prompt
+                "found pending prompt")
+      (test-log "prompt-content-extracted"
+                (and prompt
+                     (string-match "Hello agent" (alist-get 'content prompt)))
+                (format "content: %s"
+                        (and prompt
+                             (substring (alist-get 'content prompt) 0
+                                       (min 30 (length (alist-get 'content prompt))))))))
+
+    ;; Test has-pending-prompt-p
+    (test-log "has-pending-prompt"
+              (agent-chat-has-pending-prompt-p buf)
+              "has pending prompt")
+
+    ;; Set up for response transformation
+    (agent-set 'chat-pending (list (cons 'buffer (buffer-name buf))))
+
+    ;; Test response transformation
+    (agent-chat-respond "I am doing well, thank you!" "Thinking about response...")
+    (with-current-buffer buf
+      (test-log "response-creates-tick-heading"
+                (string-match "^\\* Tick [0-9]+" (buffer-string))
+                "tick heading created")
+      (test-log "response-has-human-prompt"
+                (string-match "^\\*\\* Human Prompt" (buffer-string))
+                "human prompt subheading")
+      (test-log "response-has-agent-response"
+                (string-match "^\\*\\* Agent Response" (buffer-string))
+                "agent response subheading")
+      (test-log "response-preserves-content"
+                (string-match "Hello agent" (buffer-string))
+                "original content preserved")
+      (test-log "response-includes-reply"
+                (string-match "doing well" (buffer-string))
+                "response text included"))
+
+    ;; Test no longer has pending prompt (now wrapped in Tick)
+    (test-log "no-pending-after-response"
+              (not (agent-chat-has-pending-prompt-p buf))
+              "no pending prompt after response")
+
+    ;; Test reading exchanges
+    (let ((exchanges (agent-chat-read-exchanges 1 buf)))
+      (test-log "read-exchanges"
+                exchanges
+                (format "got %d exchanges" (length exchanges)))
+      (when exchanges
+        (test-log "exchange-has-human"
+                  (alist-get 'human (car exchanges))
+                  (format "human: %s"
+                          (truncate-string-to-width
+                           (or (alist-get 'human (car exchanges)) "nil") 30)))
+        (test-log "exchange-has-agent"
+                  (alist-get 'agent (car exchanges))
+                  (format "agent: %s"
+                          (truncate-string-to-width
+                           (or (alist-get 'agent (car exchanges)) "nil") 30)))))
+
+    ;; Clean up
+    (kill-buffer buf)))
 
 ;;; Integration Tests (Manual - require API key)
 
@@ -658,16 +817,16 @@ NOT included in automated CI tests."
         (message "Response received")
 
         ;; Check eval happened
-        (let ((last-eval (agent-get :last-eval-result)))
-          (if (and last-eval (not (plist-get last-eval :skipped)))
+        (let ((last-eval (agent-get 'last-eval-result)))
+          (if (and last-eval (not (alist-get 'skipped last-eval)))
               (progn
-                (message "Eval executed: %s" (plist-get last-eval :elisp))
-                (message "Result: %s" (plist-get last-eval :result))
-                (message "Success: %s" (plist-get last-eval :success))
+                (message "Eval executed: %s" (alist-get 'elisp last-eval))
+                (message "Result: %s" (alist-get 'result last-eval))
+                (message "Success: %s" (alist-get 'success last-eval))
                 (test-log "round-1-eval" t
                           (format "Eval: %s => %s"
-                                  (plist-get last-eval :elisp)
-                                  (plist-get last-eval :result))))
+                                  (alist-get 'elisp last-eval)
+                                  (alist-get 'result last-eval))))
             (message "No eval in round 1 (agent may have returned null)")
             (test-log "round-1-eval" t "Agent didn't eval (acceptable)"))))
     (error
@@ -685,11 +844,11 @@ NOT included in automated CI tests."
         (message "Response received")
 
         ;; Check agent saw previous result
-        (let ((last-eval (agent-get :last-eval-result)))
+        (let ((last-eval (agent-get 'last-eval-result)))
           (test-log "round-2-complete" t
                     (format "Tick: %d, Last eval tick: %s"
                             (agent-current-tick)
-                            (plist-get last-eval :tick)))))
+                            (alist-get 'tick last-eval)))))
     (error
      (message "Round 2 error: %s" (error-message-string err))
      (test-log "round-2-complete" nil (error-message-string err))))
@@ -705,8 +864,8 @@ NOT included in automated CI tests."
   "Run assertions on eval loop state after test-eval-loop."
   ;; Consciousness should have eval result
   (test-log "consciousness-has-eval"
-            (agent-get :last-eval-result)
-            ":last-eval-result in consciousness")
+            (agent-get 'last-eval-result)
+            "last-eval-result in consciousness")
 
   ;; Tick should have advanced
   (test-log "tick-advanced"
@@ -715,14 +874,14 @@ NOT included in automated CI tests."
 
   ;; Git commit should have happened
   (test-log "git-committed"
-            (agent-get :last-commit)
-            (format "Last commit: %s" (agent-get :last-commit)))
+            (agent-get 'last-commit)
+            (format "Last commit: %s" (agent-get 'last-commit)))
 
   ;; Monologue should have entries
   (test-log "monologue-has-entries"
-            (> (length (agent-get :recent-monologue)) 1)
+            (> (length (agent-get 'recent-monologue)) 1)
             (format "Monologue entries: %d"
-                    (length (agent-get :recent-monologue)))))
+                    (length (agent-get 'recent-monologue)))))
 
 (defun test-eval-error-handling ()
   "Test that eval errors don't crash harness.
@@ -735,11 +894,11 @@ Run with M-x test-eval-error-handling."
   (require 'agent-inference)
   (let ((result (agent-eval "(this-function-does-not-exist)")))
     (test-log "error-captured"
-              (not (plist-get result :success))
+              (not (alist-get 'success result))
               "Error should be captured")
     (test-log "error-has-message"
-              (stringp (plist-get result :error))
-              (format "Error: %s" (plist-get result :error)))
+              (stringp (alist-get 'error result))
+              (format "Error: %s" (alist-get 'error result)))
     (test-log "no-crash"
               t
               "Harness didn't crash"))
@@ -747,11 +906,11 @@ Run with M-x test-eval-error-handling."
   ;; Test read error
   (let ((result (agent-eval "(unclosed-paren")))
     (test-log "read-error-captured"
-              (not (plist-get result :success))
+              (not (alist-get 'success result))
               "Read error should be captured")
     (test-log "read-error-message"
-              (stringp (plist-get result :error))
-              (format "Read error: %s" (plist-get result :error))))
+              (stringp (alist-get 'error result))
+              (format "Read error: %s" (alist-get 'error result))))
 
   (test-summary))
 
@@ -786,7 +945,10 @@ Run with M-x test-eval-error-handling."
         (test-eval-execution)
         (test-context-integration)
         (test-skill-binding)
+        (test-context-depth-controls)
+        (test-bootstrap-skills)
         (test-chat-interface)
+        (test-chat-prompt-blocks)
         (test-warm-start)
         (test-long-gap)
         (test-summary))
@@ -822,7 +984,10 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-eval-execution)
           (test-context-integration)
           (test-skill-binding)
+          (test-context-depth-controls)
+          (test-bootstrap-skills)
           (test-chat-interface)
+          (test-chat-prompt-blocks)
           (test-warm-start)
           (test-long-gap)
           (setq all-passed (test-summary)))

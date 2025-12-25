@@ -30,6 +30,7 @@
 (require 'agent-tick)
 (require 'agent-api)
 (require 'agent-inference)
+(require 'agent-scratchpad)
 
 ;;; Variables
 
@@ -105,7 +106,10 @@ Returns the consciousness plist."
   
   ;; Initialize skill system
   (agent-init-skills)
-  
+
+  ;; Initialize scratchpad
+  (agent-ensure-scratchpad)
+
   ;; Ensure at least one thread exists (cold start)
   (agent-ensure-default-thread)
   
@@ -159,11 +163,11 @@ Preserves git history but reinitializes consciousness."
       (princ (format "Last Monologue: %s\n" (or (agent-monologue-head) "none")))
       (princ (format "Active Skills: %d\n" (length (agent-active-skills))))
       (princ "\n")
-      (let ((budget (agent-get :budget)))
+      (let ((budget (agent-get 'budget)))
         (princ (format "Budget: $%.2f / $%.2f (%s)\n"
-                       (plist-get budget :cost-so-far)
-                       (plist-get budget :budget-limit)
-                       (plist-get budget :pressure))))
+                       (or (alist-get 'cost-so-far budget) 0.0)
+                       (or (alist-get 'budget-limit budget) 5.0)
+                       (or (alist-get 'pressure budget) 'low))))
       (princ (format "Human Review Pending: %s\n" (agent-human-review-pending-p))))))
 
 ;;; Autoload hints

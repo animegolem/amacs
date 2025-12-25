@@ -6,12 +6,12 @@ tags:
   - buffers
   - modes
   - scratchpad
-kanban_status: planned
-depends_on: 
+kanban_status: done
+depends_on:
   - AI-IMP-025
-confidence_score: 0.9
+confidence_score: 0.95
 created_date: 2025-12-24
-close_date:
+close_date: 2025-12-24
 --- 
 
 # AI-IMP-026: Mode-Based Buffer Discovery + Scratchpad
@@ -83,19 +83,19 @@ Replace hardcoded buffer names with mode-based discovery and add scratchpad mode
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**? 
 </CRITICAL_RULE> 
 
-- [ ] Create `harness/agent-scratchpad.el` with mode definition
-- [ ] Add `agent-find-buffers-by-mode` helper function
-- [ ] Add `agent-create-scratchpad` function
-- [ ] Add `agent-ensure-scratchpad` for init
-- [ ] Update `agent-get-global-buffers` to use mode discovery
-- [ ] Update `agent-init` to call scratchpad initialization
-- [ ] Update `agent-create-chat-buffer` to ensure mode is set
-- [ ] Add require for agent-scratchpad in agent-core
-- [ ] Update core SKILL.md with scratchpad documentation
-- [ ] Add test for mode-based chat discovery
-- [ ] Add test for mode-based scratchpad discovery
-- [ ] Add test for scratchpad creation on init
-- [ ] Verify chat buffer found regardless of name
+- [x] Create `harness/agent-scratchpad.el` with mode definition
+- [x] Add `agent-find-buffers-by-mode` helper function
+- [x] Add `agent-create-scratchpad` function
+- [x] Add `agent-ensure-scratchpad` for init
+- [x] Update `agent-get-global-buffers` to use mode discovery
+- [x] Update `agent-init` to call scratchpad initialization
+- [x] Update `agent-create-chat-buffer` to ensure mode is set (already done)
+- [x] Add require for agent-scratchpad in agent-core
+- [ ] Update core SKILL.md with scratchpad documentation (deferred to IMP-028)
+- [x] Add test for mode-based chat discovery
+- [x] Add test for mode-based scratchpad discovery
+- [x] Add test for scratchpad creation on init
+- [x] Verify chat buffer found regardless of name
 
 ### Acceptance Criteria
 
@@ -119,4 +119,8 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+1. **Test file requires** - The test file needed explicit requires for `agent-chat` and `agent-scratchpad` since the test functions call their APIs directly, even though `agent-core` transitively loads them.
+
+2. **Mode discovery function** - Created `agent-find-buffers-by-mode` to check `buffer-local-value` of the mode variable on each buffer. Combined chat and scratchpad discovery in `agent-get-mode-buffers`.
+
+3. **Fallback behavior** - `agent-get-global-buffers` falls back to consciousness `global-buffers` field and then empty list, ensuring graceful degradation if no modes are enabled.

@@ -34,11 +34,12 @@
 (defvar agent-skill-bindings-file "~/.agent/skill-bindings.el"
   "File where skill bindings are persisted.")
 
-(defvar agent-bootstrap-skill-source 
+(defvar agent-bootstrap-skills-source
   (let ((dir (file-name-directory (or load-file-name buffer-file-name default-directory))))
     ;; harness/ is at same level as skills/
-    (expand-file-name "../skills/amacs-bootstrap-skill/core/" dir))
-  "Source location for bootstrap skill (in repo).")
+    (expand-file-name "../skills/amacs-bootstrap-skill/" dir))
+  "Source location for all bootstrap skills (in repo).
+Contains subdirectories: core/, chat/, etc.")
 
 ;;; Binding Functions
 
@@ -128,33 +129,33 @@ Returns the content as a string, or nil if skill doesn't exist."
 
 (defun agent-thread-bound-skills (&optional thread-id)
   "Return list of skills bound to THREAD-ID (default: active thread)."
-  (let ((thread (agent-get-thread (or thread-id (agent-get :active-thread)))))
-    (plist-get thread :bound-skills)))
+  (let ((thread (agent-get-thread (or thread-id (agent-get 'active-thread)))))
+    (alist-get 'bound-skills thread)))
 
 (defun agent-bind-skill-to-thread (skill-name &optional thread-id)
   "Bind SKILL-NAME to THREAD-ID (default: active thread).
 The skill's SKILL.md will load in context while this thread is active."
-  (let* ((tid (or thread-id (agent-get :active-thread)))
+  (let* ((tid (or thread-id (agent-get 'active-thread)))
          (thread (agent-get-thread tid))
-         (current-skills (or (plist-get thread :bound-skills) '())))
+         (current-skills (or (alist-get 'bound-skills thread) '())))
     (unless tid
       (error "No active thread to bind skill to"))
     (unless (member skill-name (agent-list-available-skills))
       (error "Skill '%s' not found in ~/.agent/skills/" skill-name))
     (unless (member skill-name current-skills)
       (agent--update-thread tid
-        (list :bound-skills (cons skill-name current-skills))))
+        `((bound-skills . ,(cons skill-name current-skills)))))
     (format "Bound skill '%s' to thread '%s'" skill-name tid)))
 
 (defun agent-unbind-skill-from-thread (skill-name &optional thread-id)
   "Unbind SKILL-NAME from THREAD-ID (default: active thread)."
-  (let* ((tid (or thread-id (agent-get :active-thread)))
+  (let* ((tid (or thread-id (agent-get 'active-thread)))
          (thread (agent-get-thread tid))
-         (current-skills (plist-get thread :bound-skills)))
+         (current-skills (alist-get 'bound-skills thread)))
     (unless tid
       (error "No active thread to unbind skill from"))
     (agent--update-thread tid
-      (list :bound-skills (remove skill-name current-skills)))
+      `((bound-skills . ,(remove skill-name current-skills))))
     (format "Unbound skill '%s' from thread '%s'" skill-name tid)))
 
 (defun agent--load-skill-content (skill-name)
@@ -235,19 +236,19 @@ This is what gets included in inference context."
 ;;; Skill Use Tracking
 
 (defun agent-record-skill-use (skill-name)
-  "Record that SKILL-NAME was used, updating :active-skills."
-  (let* ((active (or (agent-get :active-skills) '()))
+  "Record that SKILL-NAME was used, updating active-skills."
+  (let* ((active (or (agent-get 'active-skills) '()))
          (existing (assoc skill-name active)))
     (if existing
-        ;; Increment use count
-        (setf (plist-get (cdr existing) :use-count)
-              (1+ (or (plist-get (cdr existing) :use-count) 0)))
-      ;; Add new entry
-      (push (cons skill-name 
-                  (list :loaded-tick (agent-current-tick)
-                        :use-count 1))
+        ;; Increment use count - the cdr is an alist now
+        (setf (alist-get 'use-count (cdr existing))
+              (1+ (or (alist-get 'use-count (cdr existing)) 0)))
+      ;; Add new entry with alist value
+      (push (cons skill-name
+                  `((loaded-tick . ,(agent-current-tick))
+                    (use-count . 1)))
             active))
-    (agent-set :active-skills active)))
+    (agent-set 'active-skills active)))
 
 ;;; Bindings Persistence
 
@@ -269,48 +270,64 @@ This is what gets included in inference context."
 
 ;;; Bootstrap Skill Installation
 
-(defun agent-ensure-core-skill ()
-  "Ensure core skill exists in ~/.agent/skills/core/.
-Copies from repo if not present."
-  (let ((target-dir (expand-file-name "core" agent-skills-directory))
-        (source-dir agent-bootstrap-skill-source))
-    (unless (file-exists-p (expand-file-name "SKILL.md" target-dir))
-      (message "Installing core skill from %s" source-dir)
-      ;; Create target directory
-      (make-directory target-dir t)
-      ;; Copy SKILL.md
-      (when (file-exists-p (expand-file-name "SKILL.md" source-dir))
+(defun agent--copy-skill-directory (skill-name source-base target-base)
+  "Copy a single skill SKILL-NAME from SOURCE-BASE to TARGET-BASE.
+Copies SKILL.md and references/ directory."
+  (let ((source-dir (expand-file-name skill-name source-base))
+        (target-dir (expand-file-name skill-name target-base)))
+    (when (and (file-directory-p source-dir)
+               (file-exists-p (expand-file-name "SKILL.md" source-dir)))
+      ;; Only copy if target doesn't exist
+      (unless (file-exists-p (expand-file-name "SKILL.md" target-dir))
+        (message "Installing %s skill from %s" skill-name source-dir)
+        ;; Create target directory
+        (make-directory target-dir t)
+        ;; Copy SKILL.md
         (copy-file (expand-file-name "SKILL.md" source-dir)
                    (expand-file-name "SKILL.md" target-dir)
-                   t))
-      ;; Copy references directory
-      (let ((ref-source (expand-file-name "references" source-dir))
-            (ref-target (expand-file-name "references" target-dir)))
-        (when (file-directory-p ref-source)
-          (make-directory ref-target t)
-          (dolist (file (directory-files ref-source t "^[^.]"))
-            (when (file-regular-p file)
-              (copy-file file 
-                         (expand-file-name (file-name-nondirectory file) ref-target)
-                         t)))))
-      (message "Core skill installed to %s" target-dir))))
+                   t)
+        ;; Copy references directory if it exists
+        (let ((ref-source (expand-file-name "references" source-dir))
+              (ref-target (expand-file-name "references" target-dir)))
+          (when (file-directory-p ref-source)
+            (make-directory ref-target t)
+            (dolist (file (directory-files ref-source t "^[^.]"))
+              (when (file-regular-p file)
+                (copy-file file
+                           (expand-file-name (file-name-nondirectory file) ref-target)
+                           t)))))
+        (message "%s skill installed to %s" skill-name target-dir)))))
+
+(defun agent-ensure-bootstrap-skills ()
+  "Ensure all bootstrap skills exist in ~/.agent/skills/.
+Copies core, chat, and any other skills from repo if not present."
+  (let ((source-base agent-bootstrap-skills-source)
+        (target-base (expand-file-name agent-skills-directory)))
+    (when (file-directory-p source-base)
+      ;; Iterate over all subdirectories in bootstrap source
+      (dolist (entry (directory-files source-base nil "^[^.]"))
+        (when (file-directory-p (expand-file-name entry source-base))
+          (agent--copy-skill-directory entry source-base target-base))))))
+
+;; Backward compatibility alias
+(defalias 'agent-ensure-core-skill 'agent-ensure-bootstrap-skills)
 
 ;;; Initialization
 
 (defun agent-init-skills ()
   "Initialize the skill system.
-Ensures directories exist, installs core skill, loads bindings."
+Ensures directories exist, installs all bootstrap skills, loads bindings."
   ;; Ensure skills directory exists
   (let ((dir (expand-file-name agent-skills-directory)))
     (unless (file-directory-p dir)
       (make-directory dir t)))
-  ;; Install core skill if missing
-  (agent-ensure-core-skill)
+  ;; Install all bootstrap skills if missing
+  (agent-ensure-bootstrap-skills)
   ;; Load saved bindings
   (agent-load-skill-bindings)
   ;; Record core skill as active
   (agent-record-skill-use "core")
-  (message "Skill system initialized. Available: %s" 
+  (message "Skill system initialized. Available: %s"
            (agent-list-available-skills)))
 
 ;;; Inspection
@@ -321,9 +338,9 @@ Ensures directories exist, installs core skill, loads bindings."
   (with-output-to-temp-buffer "*Agent Skills*"
     (princ "AMACS Skill System\n")
     (princ "==================\n\n")
-    (princ (format "Skills directory: %s\n" 
+    (princ (format "Skills directory: %s\n"
                    (expand-file-name agent-skills-directory)))
-    (princ (format "Available skills: %s\n\n" 
+    (princ (format "Available skills: %s\n\n"
                    (or (agent-list-available-skills) "(none)")))
     (princ "Mode Bindings:\n")
     (if agent-mode-skills
@@ -341,13 +358,13 @@ Ensures directories exist, installs core skill, loads bindings."
           (princ (format "  %s -> %s\n" (car pair) (cdr pair))))
       (princ "  (none)\n"))
     (princ "\nActive Skills (from consciousness):\n")
-    (let ((active (agent-get :active-skills)))
+    (let ((active (agent-get 'active-skills)))
       (if active
           (dolist (entry active)
             (princ (format "  %s: loaded tick %d, used %d times\n"
                            (car entry)
-                           (plist-get (cdr entry) :loaded-tick)
-                           (plist-get (cdr entry) :use-count))))
+                           (alist-get 'loaded-tick (cdr entry))
+                           (alist-get 'use-count (cdr entry)))))
         (princ "  (none)\n")))))
 
 (provide 'agent-skills)

@@ -18,6 +18,7 @@
 (require 'agent-consciousness)
 (require 'agent-threads)
 (require 'agent-skills)
+(require 'agent-scratchpad)
 
 ;;; Buffer Hydration
 
@@ -30,59 +31,85 @@ Strips non-ASCII characters to avoid url.el multibyte issues."
     (replace-regexp-in-string "[^[:ascii:]]" "?" str)))
 
 (defun agent-hydrate-buffer (buffer-name)
-  "Return content plist for BUFFER-NAME.
+  "Return content alist for BUFFER-NAME.
 Returns nil if buffer doesn't exist."
   (let ((buf (get-buffer buffer-name)))
     (when buf
-      `(:name ,buffer-name
-        :content ,(agent--sanitize-string
-                   (with-current-buffer buf
-                     (buffer-substring-no-properties (point-min) (point-max))))
-        :point ,(with-current-buffer buf (point))
-        :mode ,(buffer-local-value 'major-mode buf)
-        :modified ,(buffer-modified-p buf)))))
+      `((name . ,buffer-name)
+        (content . ,(agent--sanitize-string
+                     (with-current-buffer buf
+                       (buffer-substring-no-properties (point-min) (point-max)))))
+        (point . ,(with-current-buffer buf (point)))
+        (mode . ,(buffer-local-value 'major-mode buf))
+        (modified . ,(buffer-modified-p buf))))))
 
 (defun agent-hydrate-buffers (buffer-names)
-  "Hydrate a list of BUFFER-NAMES into content plists.
+  "Hydrate a list of BUFFER-NAMES into content alists.
 Skips buffers that don't exist."
   (seq-filter #'identity
               (mapcar #'agent-hydrate-buffer buffer-names)))
 
-;;; Consciousness Summary
+;;; Consciousness for Context
 
-(defun agent-consciousness-summary ()
-  "Return a trimmed consciousness for context inclusion.
-Excludes large fields that are handled separately."
-  `(:identity ,(agent-get :identity)
-    :current-tick ,(agent-current-tick)
-    :mood ,(agent-mood)
-    :confidence ,(agent-confidence)
-    :active-thread ,(agent-get :active-thread)
-    :thread-count ,(length (agent-get :open-threads))
-    :human-review-requested ,(agent-human-review-pending-p)
-    :long-gap-detected ,(agent-get :long-gap-detected)
-    :budget ,(agent-get :budget)))
+(defun agent-consciousness-for-context ()
+  "Return consciousness state for context inclusion.
+Includes all fields except those shown in dedicated sections
+\(recent-monologue, last-actions, open-threads details).
+Agent needs full self-visibility for effective self-management."
+  `((identity . ,(agent-get 'identity))
+    ;; Temporal
+    (current-tick . ,(agent-current-tick))
+    (current-time . ,(agent-get 'current-time))
+    (last-inference-time . ,(agent-get 'last-inference-time))
+    (long-gap-detected . ,(agent-get 'long-gap-detected))
+    ;; Affective
+    (mood . ,(agent-mood))
+    (confidence . ,(agent-confidence))
+    ;; Threads (summary - details in active-thread section)
+    (active-thread . ,(agent-get 'active-thread))
+    (thread-budget . ,(agent-get 'thread-budget))
+    (thread-count . ,(length (agent-get 'open-threads)))
+    (completed-thread-count . ,(length (agent-get 'completed-threads)))
+    ;; Context controls
+    (chat-context-depth . ,(agent-get 'chat-context-depth))
+    (monologue-context-depth . ,(agent-get 'monologue-context-depth))
+    (global-buffers . ,(agent-get 'global-buffers))
+    (focus . ,(agent-get 'focus))
+    ;; Memory pointers
+    (last-commit . ,(agent-get 'last-commit))
+    ;; Skills
+    (active-skills . ,(agent-get 'active-skills))
+    ;; Human interaction
+    (human-review-requested . ,(agent-human-review-pending-p))
+    (chat-pending . ,(not (null (agent-get 'chat-pending))))
+    ;; Eval tracking
+    (has-eval-result . ,(not (null (agent-get 'last-eval-result))))
+    ;; Budget
+    (budget . ,(agent-get 'budget))))
+
+;; Backward compatibility alias
+(defalias 'agent-consciousness-summary 'agent-consciousness-for-context)
 
 ;;; Thread Context
 
 (defun agent--build-active-thread-context (thread)
-  "Build full context for active THREAD with hydrated buffers."
+  "Build full context for active THREAD with hydrated buffers. Returns alist."
   (when thread
-    (let* ((buffers (plist-get thread :buffers))
-           (skill-tags (plist-get thread :skill-tags))
+    (let* ((buffers (alist-get 'buffers thread))
+           (skill-tags (alist-get 'skill-tags thread))
            (hydrated-buffers (agent-hydrate-buffers buffers))
            ;; Load skills for this thread's tags
            (skills-content (agent-skills-for-context)))
-      `(:id ,(plist-get thread :id)
-        :concern ,(plist-get thread :concern)
-        :goal ,(plist-get thread :goal)
-        :deliverable ,(plist-get thread :deliverable)
-        :thread-type ,(plist-get thread :thread-type)
-        :approach ,(plist-get thread :approach)
-        :started-tick ,(plist-get thread :started-tick)
-        :skill-tags ,skill-tags
-        :buffers ,hydrated-buffers
-        :skills ,skills-content))))
+      `((id . ,(alist-get 'id thread))
+        (concern . ,(alist-get 'concern thread))
+        (goal . ,(alist-get 'goal thread))
+        (deliverable . ,(alist-get 'deliverable thread))
+        (thread-type . ,(alist-get 'thread-type thread))
+        (approach . ,(alist-get 'approach thread))
+        (started-tick . ,(alist-get 'started-tick thread))
+        (skill-tags . ,skill-tags)
+        (buffers . ,hydrated-buffers)
+        (skills . ,skills-content)))))
 
 (defun agent--build-pending-threads-context (threads)
   "Build dehydrated context for pending THREADS."
@@ -91,30 +118,31 @@ Excludes large fields that are handled separately."
 ;;; Global Buffers
 
 (defun agent-get-global-buffers ()
-  "Return list of global buffer names that are always in context."
-  (or (agent-get :global-buffers) '("*agent-chat*")))
+  "Return list of global buffer names that are always in context.
+Discovers buffers by mode (amacs-chat-mode, agent-scratchpad-mode)
+rather than hardcoded names."
+  (or (agent-get-mode-buffers)
+      (agent-get 'global-buffers)
+      '()))
 
 ;;; Main Context Assembly
 
 (defun agent-build-context ()
   "Build complete context for inference.
-Returns a plist ready for LLM consumption."
+Returns an alist ready for LLM consumption.
+Respects agent-controlled depth settings from consciousness."
   (let* ((active-thread (agent-get-active-thread))
          (pending-threads (agent-get-pending-threads))
          (global-buffer-names (agent-get-global-buffers))
-         (recent-monologue (seq-take (agent-get :recent-monologue) 20)))
-    
-    `(:consciousness ,(agent-consciousness-summary)
-      
-      :active-thread ,(agent--build-active-thread-context active-thread)
-      
-      :pending-threads ,(agent--build-pending-threads-context pending-threads)
-      
-      :global-buffers ,(agent-hydrate-buffers global-buffer-names)
-      
-      :recent-monologue ,recent-monologue
-      
-      :last-actions ,(seq-take (agent-get :last-actions) 10))))
+         (monologue-depth (or (agent-get 'monologue-context-depth) 20))
+         (recent-monologue (seq-take (agent-get 'recent-monologue) monologue-depth)))
+
+    `((consciousness . ,(agent-consciousness-for-context))
+      (active-thread . ,(agent--build-active-thread-context active-thread))
+      (pending-threads . ,(agent--build-pending-threads-context pending-threads))
+      (global-buffers . ,(agent-hydrate-buffers global-buffer-names))
+      (recent-monologue . ,recent-monologue)
+      (last-actions . ,(seq-take (agent-get 'last-actions) 10)))))
 
 ;;; Context for Wake Decisions
 
@@ -122,7 +150,7 @@ Returns a plist ready for LLM consumption."
   "Return list of buffer names currently being watched.
 Includes active thread's buffers plus global buffers."
   (let* ((active (agent-get-active-thread))
-         (thread-buffers (when active (plist-get active :buffers)))
+         (thread-buffers (when active (alist-get 'buffers active)))
          (global-buffers (agent-get-global-buffers)))
     (delete-dups (append thread-buffers global-buffers))))
 
@@ -140,27 +168,27 @@ Includes active thread's buffers plus global buffers."
   "Estimate token count for current context.
 Useful for monitoring context budget."
   (let* ((ctx (agent-build-context))
-         (active (plist-get ctx :active-thread))
-         (active-buffers (plist-get active :buffers))
-         (pending (plist-get ctx :pending-threads))
-         (global (plist-get ctx :global-buffers))
-         (monologue (plist-get ctx :recent-monologue)))
-    `(:active-thread-buffers 
-      ,(apply #'+ (mapcar (lambda (b) 
-                           (agent--estimate-tokens (plist-get b :content)))
-                         active-buffers))
-      :active-thread-skills
-      ,(agent--estimate-tokens (plist-get active :skills))
-      :pending-threads
-      ,(agent--estimate-tokens (format "%S" pending))
-      :global-buffers
-      ,(apply #'+ (mapcar (lambda (b)
-                           (agent--estimate-tokens (plist-get b :content)))
-                         global))
-      :monologue
-      ,(apply #'+ (mapcar #'agent--estimate-tokens monologue))
-      :consciousness
-      ,(agent--estimate-tokens (format "%S" (plist-get ctx :consciousness))))))
+         (active (alist-get 'active-thread ctx))
+         (active-buffers (alist-get 'buffers active))
+         (pending (alist-get 'pending-threads ctx))
+         (global (alist-get 'global-buffers ctx))
+         (monologue (alist-get 'recent-monologue ctx)))
+    `((active-thread-buffers
+       . ,(apply #'+ (mapcar (lambda (b)
+                               (agent--estimate-tokens (alist-get 'content b)))
+                             (or active-buffers '()))))
+      (active-thread-skills
+       . ,(agent--estimate-tokens (alist-get 'skills active)))
+      (pending-threads
+       . ,(agent--estimate-tokens (format "%S" pending)))
+      (global-buffers
+       . ,(apply #'+ (mapcar (lambda (b)
+                               (agent--estimate-tokens (alist-get 'content b)))
+                             (or global '()))))
+      (monologue
+       . ,(apply #'+ (mapcar #'agent--estimate-tokens (or monologue '()))))
+      (consciousness
+       . ,(agent--estimate-tokens (format "%S" (alist-get 'consciousness ctx)))))))
 
 ;;; Inspection
 
@@ -176,19 +204,19 @@ Useful for monitoring context budget."
         (princ (format "  %s%s\n" buf
                        (if (get-buffer buf) "" " (not loaded)"))))
       (princ "\nEstimated tokens:\n")
-      (princ (format "  Active thread buffers: ~%d\n" 
-                     (plist-get tokens :active-thread-buffers)))
+      (princ (format "  Active thread buffers: ~%d\n"
+                     (alist-get 'active-thread-buffers tokens)))
       (princ (format "  Active thread skills:  ~%d\n"
-                     (plist-get tokens :active-thread-skills)))
+                     (alist-get 'active-thread-skills tokens)))
       (princ (format "  Pending threads:       ~%d\n"
-                     (plist-get tokens :pending-threads)))
+                     (alist-get 'pending-threads tokens)))
       (princ (format "  Global buffers:        ~%d\n"
-                     (plist-get tokens :global-buffers)))
+                     (alist-get 'global-buffers tokens)))
       (princ (format "  Monologue:             ~%d\n"
-                     (plist-get tokens :monologue)))
+                     (alist-get 'monologue tokens)))
       (princ (format "  Consciousness:         ~%d\n"
-                     (plist-get tokens :consciousness)))
-      (let ((total (apply #'+ (seq-filter #'numberp (cdr tokens)))))
+                     (alist-get 'consciousness tokens)))
+      (let ((total (apply #'+ (mapcar #'cdr tokens))))
         (princ (format "\n  TOTAL:                 ~%d tokens\n" total))))))
 
 (provide 'agent-context)
