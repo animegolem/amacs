@@ -4,21 +4,61 @@
 :PROPERTIES:
 :CUSTOM_ID: audit-trail
 :END:
-| Date       | RFC Section(s)            | Change Summary                                                                                              | Related ADR    |
-|------------+---------------------------+-------------------------------------------------------------------------------------------------------------+----------------|
-| 2025-12-18 | Part 3 (major rewrite)    | Phase restructuring: 1→1b→2→3→4→5. Code-mode over tool-calling. Infrastructure deferred to Phase 3.         | [[AI-ADR-002]] |
-| 2025-12-18 | RFC structure             | Split monolithic RFC into 21 separate org files for maintainability                                         | -              |
-| 2025-12-06 | Implementation            | EPIC-001 complete: IMP-001 through IMP-004 implemented. Phase 1 harness functional.                         | -              |
-| 2025-12-04 | Part 5, Part 6            | Thread-centric context: threads own buffers, global-buffers for chat, hydration states                      | [[AI-ADR-001]] |
-| 2025-12-04 | Part 3 (Phase 3, Phase 4) | Added evidence-based thread completion, speculative Phase 4 with consent framing                            | -              |
-| 2025-12-04 | Part 16                   | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror                     | -              |
-| 2025-11-27 | Initial                   | RFC v3 created from synthesis of prior documents                                                            | -              |
+| Date       | RFC Section(s)                | Change Summary                                                                                              | Related ADR/EPIC |
+|------------+-------------------------------+-------------------------------------------------------------------------------------------------------------+------------------|
+| 2025-12-25 | Part 6, 7, 14, 15, 21 (new)   | EPIC-003 complete. Alist migration. Git-backed workspace. Auth-source credentials. Hub specification.      | [[AI-EPIC-003]], [[AI-EPIC-004]] |
+| 2025-12-18 | Part 3 (major rewrite)        | Phase restructuring: 1→1b→2→3→4→5. Code-mode over tool-calling. Infrastructure deferred to Phase 3.         | [[AI-ADR-002]]   |
+| 2025-12-18 | RFC structure                 | Split monolithic RFC into 21 separate org files for maintainability                                         | -                |
+| 2025-12-06 | Implementation                | EPIC-001 complete: IMP-001 through IMP-004 implemented. Phase 1 harness functional.                         | -                |
+| 2025-12-04 | Part 5, Part 6                | Thread-centric context: threads own buffers, global-buffers for chat, hydration states                      | [[AI-ADR-001]]   |
+| 2025-12-04 | Part 3 (Phase 3, Phase 4)     | Added evidence-based thread completion, speculative Phase 4 with consent framing                            | -                |
+| 2025-12-04 | Part 16                       | Added deployment options (Proxmox vs containers), local model integration, MELPA mirror                     | -                |
+| 2025-11-27 | Initial                       | RFC v3 created from synthesis of prior documents                                                            | -                |
 
 ** Version History
 | Version | Date       | Summary                                                    |
 |---------+------------+------------------------------------------------------------|
+| v3.5    | 2025-12-25 | EPIC-003 remediation, hub specification, credential security |
 | v3.4    | 2025-12-18 | Phase restructuring, code-mode paradigm, RFC split         |
 | v3.3    | 2025-12-06 | EPIC-001 completion                                        |
 | v3.2    | 2025-12-04 | Thread-centric context, evidence-based completion          |
 | v3.1    | 2025-12-04 | Deployment options                                         |
 | v3.0    | 2025-11-27 | Initial RFC v3                                             |
+
+** 2025-12-25 Detailed Changes
+:PROPERTIES:
+:CUSTOM_ID: 2025-12-25-changes
+:END:
+
+*** Part 6: Consciousness Variable
+- Converted schema from plist to alist format
+- Added =chat-context-depth= and =monologue-context-depth= fields
+- Added =api-settings= for agent self-modification
+- Added =current-activity= for status display
+- Documented buffer discovery by mode
+
+*** Part 7: Memory Architecture
+- Replaced thin git-backing with unified workspace approach
+- All work happens in =~/.agent/workspace/= (one timeline)
+- Rich monologue format with structured entries
+- Bi-encoder indexes commits containing both narrative and code
+- Scale analysis: viable for years of personal use
+
+*** Part 14: Human Interface
+- Added Hub dashboard specification
+- Redesigned chat interface with =#+begin_prompt= blocks
+- Added buffer attachment workflow
+- Added chat status line specification
+
+*** Part 15: Security Considerations
+- Added credential management via auth-source
+- Config file (safe) vs secrets (auth-source) separation
+- Setup instructions for GPG, GNOME Keyring, 1Password
+- Added workspace git security notes
+
+*** Part 21: AMACS Hub (New)
+- Full technical specification for magit-section dashboard
+- Section hierarchy and data sources
+- Navigation (RET) and actions (a/k/c)
+- API settings human/agent modification
+- Implementation status linked to EPIC-004

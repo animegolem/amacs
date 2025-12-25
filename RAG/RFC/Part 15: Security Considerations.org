@@ -4,19 +4,119 @@
 :PROPERTIES:
 :CUSTOM_ID: part-15-security-considerations
 :END:
+
 *** Threat Model
 :PROPERTIES:
 :CUSTOM_ID: threat-model
 :END:
-The agent can do anything within its airgapped body. Security is: 1. *Containment:* Body cannot reach internet or local network 2. *Inspection:* All API calls route through brain, observable 3. *Rollback:* VM snapshots enable recovery from any state 4. *Watchdog:* Services restart if hung
+The agent can do anything within its airgapped body. Security is:
+1. *Containment:* Body cannot reach internet or local network
+2. *Inspection:* All API calls route through brain, observable
+3. *Rollback:* VM snapshots enable recovery from any state
+4. *Watchdog:* Services restart if hung
 
-We are NOT trying to prevent the agent from “escaping” through clever prompting. We are ensuring that even total compromise of the body VM has bounded impact.
+We are NOT trying to prevent the agent from "escaping" through clever prompting. We are ensuring that even total compromise of the body VM has bounded impact.
+
+*** Credential Management
+:PROPERTIES:
+:CUSTOM_ID: credential-management
+:END:
+*Principle:* Credentials never stored in files that might be tracked by git.
+
+**** Config File (Safe to Track)
+:PROPERTIES:
+:CUSTOM_ID: config-file
+:END:
+=~/.agent/config.el= contains only non-sensitive settings:
+
+#+begin_src elisp
+;; Safe to commit
+(setq agent-api-endpoint "https://openrouter.ai/api/v1/chat/completions")
+(setq agent-model "anthropic/claude-sonnet-4")
+(setq agent-api-timeout 120)
+#+end_src
+
+**** API Keys via auth-source
+:PROPERTIES:
+:CUSTOM_ID: api-keys-via-auth-source
+:END:
+Secrets retrieved at runtime via Emacs auth-source:
+
+#+begin_src elisp
+(defun agent--get-api-key ()
+  "Retrieve API key from auth-source."
+  (let ((found (car (auth-source-search
+                     :host "openrouter.ai"
+                     :user "amacs"
+                     :require '(:secret)))))
+    (when found
+      (let ((secret (plist-get found :secret)))
+        (if (functionp secret)
+            (funcall secret)
+          secret)))))
+#+end_src
+
+This works with:
+- =~/.authinfo.gpg= (GPG encrypted, standard Emacs)
+- macOS Keychain (via auth-source-macos-keychain)
+- GNOME Keyring/Seahorse (via secrets.el on Fedora/GNOME)
+- 1Password, pass, etc. (via auth-source backends)
+
+**** Fallback Chain
+:PROPERTIES:
+:CUSTOM_ID: fallback-chain
+:END:
+#+begin_src elisp
+(defun agent-load-api-key ()
+  "Load API key from best available source."
+  (setq agent-api-key
+        (or (getenv "OPENROUTER_API_KEY")      ; CI/containers
+            (agent--get-api-key)                ; auth-source
+            (user-error "No API key found. See docs for setup."))))
+#+end_src
+
+Priority: Environment variable > auth-source > error.
+
+**** Setup Instructions
+:PROPERTIES:
+:CUSTOM_ID: setup-instructions
+:END:
+For GPG-encrypted authinfo:
+
+#+begin_src text
+# ~/.authinfo.gpg (after gpg --encrypt)
+machine openrouter.ai login amacs password sk-or-v1-xxxxx
+#+end_src
+
+For GNOME Keyring (Fedora):
+
+#+begin_src elisp
+(require 'secrets)
+(secrets-create-item "Login" "openrouter-amacs"
+                     "sk-or-v1-xxxxx"
+                     :host "openrouter.ai"
+                     :user "amacs")
+#+end_src
+
+For 1Password CLI:
+
+#+begin_src elisp
+(setq agent-api-key
+      (string-trim
+       (shell-command-to-string
+        "op read 'op://Personal/OpenRouter/api-key'")))
+#+end_src
 
 *** The Spinal Cord Rule
 :PROPERTIES:
 :CUSTOM_ID: the-spinal-cord-rule
 :END:
-Agent cannot modify: - VSock plumbing (communication channels) - Core systemd services (cortex-listener, commit-hooks) - Consciousness serialization (must persist correctly) - The snapshot/rollback mechanism
+Agent cannot modify:
+- VSock plumbing (communication channels)
+- Core systemd services (cortex-listener, commit-hooks)
+- Consciousness serialization (must persist correctly)
+- The snapshot/rollback mechanism
+- Auth-source configuration (cannot grant itself new credentials)
 
 Everything else is fair game for experimentation.
 
@@ -24,11 +124,31 @@ Everything else is fair game for experimentation.
 :PROPERTIES:
 :CUSTOM_ID: cicd-security-phase-3
 :END:
-When agent can push Containerfile changes: - Gitea runner builds in isolation - Network fetch requires explicit approval - Successful build triggers snapshot before deploy - Failed builds don't deploy
+When agent can push Containerfile changes:
+- Gitea runner builds in isolation
+- Network fetch requires explicit approval
+- Successful build triggers snapshot before deploy
+- Failed builds don't deploy
 
 Agent can request new tools. Human approves network access. Build happens offline.
 
+*** Workspace Git Security
+:PROPERTIES:
+:CUSTOM_ID: workspace-git-security
+:END:
+The =~/.agent/= workspace is git-backed. Critical exclusions in =.gitignore=:
+
+#+begin_src gitignore
+# Never track credentials
+*.key
+*.pem
+*.gpg
+.authinfo*
+
+# Never track API logs (contain responses)
+api-log/
+#+end_src
+
+Even if agent pushes to a remote, credentials cannot leak via git.
+
 --------------
-
-
-

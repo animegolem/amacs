@@ -4,44 +4,172 @@
 :PROPERTIES:
 :CUSTOM_ID: part-7-memory-architecture
 :END:
+
+*** Design Principle: Unified Timeline
+:PROPERTIES:
+:CUSTOM_ID: design-principle-unified-timeline
+:END:
+All agent work happens in a single git-backed workspace. This creates one timeline for both narrative (monologue, consciousness) and work products (code, documents). The bi-encoder can embed commits that contain both "what I was thinking" and "what I changed."
+
+Alternative considered: Projects in separate repos with their own git. Rejected because:
+- Temporal alignment between agent memory and work requires correlating multiple repos
+- "What was main.rs like when I was debugging ownership?" becomes a join across histories
+- Bi-encoder would need to index multiple repos with time synchronization
+
+*** Workspace Structure
+:PROPERTIES:
+:CUSTOM_ID: workspace-structure
+:END:
+#+begin_example
+~/.agent/                    # Git root for agent workspace
+├── .git/
+├── .gitignore               # Excludes credentials, logs, ephemeral
+├── config.el                # Settings (safe to track)
+├── consciousness.el         # State snapshots
+├── monologue.org            # Rich episodic entries
+├── chat.org                 # Conversation history
+├── scratchpad.org           # Working notes
+├── skills/                  # Installed skills
+│   ├── core/
+│   ├── chat/
+│   └── rust-mode/
+└── workspace/               # Actual projects
+    ├── blog/
+    ├── dotfiles/
+    ├── rust-app-1/
+    └── emacs-tools/
+#+end_example
+
+*** .gitignore (Agent Workspace)
+:PROPERTIES:
+:CUSTOM_ID: gitignore
+:END:
+#+begin_src gitignore
+# Credentials - NEVER track (handled via auth-source)
+*.key
+*.pem
+*.gpg
+.authinfo*
+
+# Large/ephemeral
+api-log/
+*.log
+
+# Emacs temporaries
+.#*
+*~
+\#*\#
+*.elc
+
+# System
+.DS_Store
+Thumbs.db
+
+# Build outputs (per-project)
+*/target/
+*/node_modules/
+*/dist/
+*/__pycache__/
+#+end_src
+
 *** Three Memory Systems
 :PROPERTIES:
 :CUSTOM_ID: three-memory-systems
 :END:
-| System           | Location                 | Purpose                        | Retrieval           |
-|------------------+--------------------------+--------------------------------+---------------------|
-| Working          | =agent-consciousness=    | Active threads, recent context | Always in context   |
-| Episodic         | =~/.agent/monologue.org= | Stream of consciousness        | Grep, recent window |
-| Autobiographical | Git history              | Actions + changes over time    | =git log --grep=    |
+| System           | Location                 | Purpose                        | Retrieval              |
+|------------------+--------------------------+--------------------------------+------------------------|
+| Working          | =agent-consciousness=    | Active threads, recent context | Always in context      |
+| Episodic         | =~/.agent/monologue.org= | Stream of consciousness        | Recent window, grep    |
+| Autobiographical | Git history              | Actions + changes over time    | Bi-encoder, git log    |
 
-*** Monologue
+*** Monologue Format (Rich Entries)
 :PROPERTIES:
-:CUSTOM_ID: monologue
+:CUSTOM_ID: monologue-format
 :END:
-#+begin_src elisp
-(agent-append-monologue "Investigating lifetime annotations")
+Monologue entries are structured blocks, not one-liners:
+
+#+begin_src org
+,* TICK 43 [rust-debugging]
+:PROPERTIES:
+:TIMESTAMP: 2025-05-26T14:32:00Z
+:MOOD: focused
+:CONFIDENCE: 0.85
+:BUFFERS: main.rs, Cargo.toml
+:END:
+
+Concern: Ownership error in main.rs line 42
+Approach: Changed lifetime annotation to 'static
+Eval: (goto-char 1042) => success
+Learned: Returned references need explicit lifetimes when escaping function scope
+
+,* TICK 44 [rust-debugging]
+:PROPERTIES:
+:TIMESTAMP: 2025-05-26T14:35:00Z
+:MOOD: satisfied
+:CONFIDENCE: 0.95
+:BUFFERS: main.rs
+:END:
+
+Thread completed. Tests passing.
+Evidence: cargo test runs clean
+Learned: The 'static bound is often correct for error types
 #+end_src
 
-- Appended to =monologue.org= with timestamp
-- Last 50-100 lines kept in =:recent-monologue=
-- Older entries grepable: =rg 'lifetime' ~/.agent/monologue.org=
-- Feeds git commit messages
+Recent entries (configurable via =monologue-context-depth=) included in context.
+Older entries searchable via grep or bi-encoder.
 
 *** Git as Autobiography
 :PROPERTIES:
 :CUSTOM_ID: git-as-autobiography
 :END:
+Each tick generates a commit capturing both narrative and changes:
+
 #+begin_example
-[TICK 142][rust-debugging][:focused] Started investigating ownership
-[TICK 145][rust-debugging][:stuck] Third attempt at lifetime fix
-[TICK 150][rust-debugging][:confident] Found it! Missing 'static
-[TICK 151][rust-debugging][:satisfied] COMPLETED - learned about 'static
-[TICK 152][config-cleanup][:neutral] Switching to keybinding work
+commit a1b2c3d
+Author: AMACS <ghost@machine>
+Date:   Mon May 26 14:32:00 2025
+
+[TICK 43][rust-debugging] Fixed lifetime annotation
+
+ consciousness.el  | Updated mood, confidence
+ monologue.org     | Added tick 43 entry
+ workspace/rust-app/src/main.rs | Changed line 42
 #+end_example
 
-Thread-tagged commits create narrative arcs: - Thread creation (new concern) - Progress (approaches tried) - Completion (outcome + learning)
+Thread-tagged commits create narrative arcs:
+- Thread creation (new concern starts)
+- Progress (approaches tried, files changed)
+- Completion (outcome + learning)
+
+*** Bi-Encoder Training (Phase 4)
+:PROPERTIES:
+:CUSTOM_ID: bi-encoder-training
+:END:
+The neural episodic memory indexes git history:
+
+*Documents:* Each commit message + changed file paths + monologue entry
+*Queries:* Natural language ("when did I fix the ownership bug?")
+*Output:* Ranked list of commits with relevance scores
+
+Because workspace is unified, queries find both:
+- The narrative ("I was trying lifetime annotations")
+- The actual changes (diff of main.rs)
+
+*** Scale Considerations
+:PROPERTIES:
+:CUSTOM_ID: scale-considerations
+:END:
+Realistic accumulation over years of personal use:
+- 50,000 ticks → 50,000 commits
+- 1M lines of code across projects → ~5MB text
+- Git repo size: ~500MB (delta compression)
+- Bi-encoder index: ~100MB (2KB per document)
+
+This is well within comfortable limits. Linux kernel is 4GB with millions of commits.
+
+*Avoid tracking:*
+- Binary assets (images, compiled binaries)
+- Generated files (node_modules, target/)
+- Large dependencies
 
 --------------
-
-
-

@@ -4,6 +4,168 @@
 :PROPERTIES:
 :CUSTOM_ID: part-14-human-interface
 :END:
+
+*** The Hub (=*amacs-hub*=)
+:PROPERTIES:
+:CUSTOM_ID: the-hub
+:END:
+A magit-section based dashboard providing unified view of agent state.
+
+#+begin_example
+TEMP: 1.0 | TOP_P: 1.0 | THINKING: off | MODEL: claude-sonnet-4
+
+ACTIVE THREAD:
+- refactor website from JS to TS
+
+INACTIVE THREADS:
+- update blog with rust discoveries
+- build screenshot tooling
+
+MOOD: focused
+
+WATCHED BUFFERS:
+- website.js
+- package.json
+
+ACTIVE SKILLS:
+- javascript
+
+* amacs-chat-mode
+** chat.org
+*** 2025-12-22
+**** Tick 23
+**** Tick 24
+
+* amacs-monologue
+** 2025-12-22
+*** [TICK 23] Investigating ownership...
+*** [TICK 24] Found the issue...
+
+* agent-scratchpad
+** Goals for today
+** Notes on lifetime annotations
+#+end_example
+
+**** Hub Keybindings
+:PROPERTIES:
+:CUSTOM_ID: hub-keybindings
+:END:
+| Key   | Context  | Action                              |
+|-------+----------+-------------------------------------|
+| =g=   | Global   | Refresh hub                         |
+| =TAB= | Section  | Toggle collapse                     |
+| =RET= | Item     | Jump to source (buffer/file/tick)   |
+| =a=   | Section  | Add (thread/buffer/skill)           |
+| =k=   | Item     | Remove/archive                      |
+| =c=   | Thread   | Complete thread (prompt for evidence) |
+| =t=   | Global   | Trigger tick                        |
+| =T=   | Global   | Trigger tick with thinking enabled  |
+| =s=   | Global   | Switch active thread                |
+| =M-t= | Global   | Toggle thinking parameter           |
+| =M-T= | Global   | Set temperature                     |
+| =?=   | Global   | Help                                |
+
+**** API Settings
+:PROPERTIES:
+:CUSTOM_ID: api-settings
+:END:
+The status bar shows current inference parameters. Both human (via keybindings) and agent (via elisp) can modify these:
+
+#+begin_src elisp
+;; Agent self-modification
+(agent-set-api-param 'temperature 0.7)
+(agent-set-api-param 'thinking t)
+#+end_src
+
+Parameters stored in consciousness, applied at next inference.
+
+*** Chat Interface (=amacs-chat-mode=)
+:PROPERTIES:
+:CUSTOM_ID: chat-interface
+:END:
+**** Human Input
+:PROPERTIES:
+:CUSTOM_ID: human-input
+:END:
+Human wraps input in prompt blocks:
+
+#+begin_src org
+,#+begin_prompt
+Let me know what seems to be going well or poorly after these ticks?
+,#+end_prompt
+#+end_src
+
+Shortcut: =<h TAB= expands to prompt block template.
+
+**** Agent Response
+:PROPERTIES:
+:CUSTOM_ID: agent-response
+:END:
+When agent responds, the prompt block is transformed into tick structure:
+
+#+begin_src org
+,* Tick 43
+:PROPERTIES:
+:COMPLETED: 2025-12-24T09:00:00Z
+:END:
+
+,** Human Prompt
+,#+begin_prompt
+Let me know what seems to be going well or poorly after these ticks?
+,#+end_prompt
+
+,** Agent Response
+,*** What's Working Well
+1. Elisp evaluation is powerful...
+2. Direct consciousness access...
+
+,*** Challenges
+1. Context boundaries unclear...
+#+end_src
+
+**** Chat Status Line
+:PROPERTIES:
+:CUSTOM_ID: chat-status-line
+:END:
+Header line shows real-time agent activity:
+
+#+begin_example
+Tick 45: Evaluating response... | Mood: focused
+#+end_example
+
+Updates during inference, shows "Idle at tick N" when complete.
+
+*** Scratchpad (=agent-scratchpad-mode=)
+:PROPERTIES:
+:CUSTOM_ID: scratchpad
+:END:
+Agent's working memory for notes, goals, plans. Created at =~/.agent/scratchpad.org= on init.
+
+- Agent can create additional scratchpad buffers
+- Discovered by mode, not name
+- Included in context automatically
+- Persists across ticks
+
+*** Buffer Attachment
+:PROPERTIES:
+:CUSTOM_ID: buffer-attachment
+:END:
+Like =@file= in Claude Code, human can attach buffers to current thread:
+
+1. Navigate to Buffers section in hub
+2. Press =a=
+3. Select buffer from completing-read
+4. Buffer added to thread's watched list
+
+Agent can also request buffers in chat; human confirms via hub.
+
+Agent can autonomously add buffers to its watch list:
+#+begin_src elisp
+(agent-thread-add-buffer "src/main.rs")
+#+end_src
+
+Human sees attached buffers in hub and can remove if needed.
+
 *** Review Request
 :PROPERTIES:
 :CUSTOM_ID: review-request
@@ -14,16 +176,7 @@ Agent can explicitly signal need for attention:
 (agent-request-human-review "Confidence declining but can't identify cause")
 #+end_src
 
-Sets:
-
-#+begin_src elisp
-:human-review-requested
-  (:requested t
-   :reason "Confidence declining but can't identify cause"
-   :requested-at-tick 156)
-#+end_src
-
-Triggers notification (email, webhook). Different from error state - a “please look at me” signal.
+Sets flag in consciousness, triggers notification. Different from error state—a "please look at me" signal.
 
 *** Intervention Philosophy
 :PROPERTIES:
@@ -33,11 +186,11 @@ Triggers notification (email, webhook). Different from error state - a “please
 
 *Later phases:* On-call emergency. Intervene for infrastructure, not cognition.
 
-*Intervention types:* - *Negotiated:* Chat conversation, discuss the issue - *Medical:* Direct state modification when system is inoperable - *Infrastructure:* Budget reset, service restart, VM snapshot rollback
+*Intervention types:*
+- *Negotiated:* Chat conversation, discuss the issue
+- *Medical:* Direct state modification when system is inoperable
+- *Infrastructure:* Budget reset, service restart, VM snapshot rollback
 
 Most interventions should be negotiated. Medical interventions are last resort.
 
 --------------
-
-
-

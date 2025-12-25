@@ -1,0 +1,184 @@
+#+title: Part 21 AMACS Hub Technical Specification
+
+** Part 21: AMACS Hub Technical Specification
+:PROPERTIES:
+:CUSTOM_ID: part-21-amacs-hub
+:END:
+
+*** Purpose
+:PROPERTIES:
+:CUSTOM_ID: purpose
+:END:
+The hub serves two audiences:
+1. *Human:* Observability dashboard, quick actions, buffer management
+2. *Agent:* Self-awareness interface, API parameter control, state inspection
+
+It is the "body awareness" interface—read-only display of state with action affordances. Content editing happens in source buffers (chat, monologue, scratchpad); the hub is for navigation and control.
+
+*** Why magit-section
+:PROPERTIES:
+:CUSTOM_ID: why-magit-section
+:END:
+Alternatives considered:
+
+| Approach     | Pros                          | Cons                             |
+|--------------+-------------------------------+----------------------------------|
+| Org-mode     | Already in stack, familiar    | Conflates display/editing        |
+| Custom       | Full control                  | Reinvent collapsing, refresh     |
+| magit-section| Built for dashboards          | New dependency                   |
+
+magit-section provides:
+- Granular refresh (update one section without touching others)
+- Built-in collapse/expand (TAB)
+- Consistent keybinding patterns
+- Read-only by design
+- What magit, forge, diff-hl all use
+
+*** Section Hierarchy
+:PROPERTIES:
+:CUSTOM_ID: section-hierarchy
+:END:
+#+begin_example
+amacs-hub-section (root)
+├── amacs-status-section
+│   └── API settings, mood, tick, confidence
+├── amacs-threads-section
+│   ├── amacs-thread-section (active, expanded)
+│   └── amacs-thread-section (inactive, collapsed)
+├── amacs-buffers-section
+│   └── amacs-buffer-section (per buffer)
+├── amacs-skills-section
+│   └── amacs-skill-section (per skill)
+├── amacs-chat-section
+│   └── amacs-chat-date-section
+│       └── amacs-chat-tick-section
+├── amacs-monologue-section
+│   └── amacs-monologue-entry-section
+└── amacs-scratchpad-section
+    └── amacs-scratchpad-heading-section
+#+end_example
+
+*** Data Sources
+:PROPERTIES:
+:CUSTOM_ID: data-sources
+:END:
+| Section    | Source                                    |
+|------------+-------------------------------------------|
+| Status     | =agent-consciousness= (mood, tick, api-settings) |
+| Threads    | =agent-consciousness= open-threads, active-thread |
+| Buffers    | Active thread's =buffers= field           |
+| Skills     | Active thread's =bound-skills= field      |
+| Chat       | Parse =amacs-chat-mode= buffers for tick headings |
+| Monologue  | Recent lines from =monologue.org=         |
+| Scratchpad | Parse =agent-scratchpad-mode= buffer headings |
+
+*** Navigation (RET)
+:PROPERTIES:
+:CUSTOM_ID: navigation
+:END:
+| Section    | RET Action                                |
+|------------+-------------------------------------------|
+| Thread     | Switch active thread                      |
+| Buffer     | =switch-to-buffer-other-window=           |
+| Skill      | =find-file-other-window= on SKILL.md      |
+| Chat tick  | Jump to =* Tick N= heading in chat buffer |
+| Monologue  | Jump to line in monologue.org             |
+| Scratchpad | Jump to heading in scratchpad buffer      |
+
+Hub remains visible; target opens in other window.
+
+*** Actions
+:PROPERTIES:
+:CUSTOM_ID: actions
+:END:
+Context-sensitive based on current section:
+
+| Key | Threads Section | Buffers Section | Skills Section |
+|-----+-----------------+-----------------+----------------|
+| =a= | Create thread   | Add buffer      | Bind skill     |
+| =k= | Archive thread  | Remove buffer   | Unbind skill   |
+| =c= | Complete thread | —               | —              |
+
+*** API Settings Section
+:PROPERTIES:
+:CUSTOM_ID: api-settings-section
+:END:
+Status bar at top of hub:
+
+#+begin_example
+TEMP: 1.0 | TOP_P: 1.0 | THINKING: off | MODEL: claude-sonnet-4
+#+end_example
+
+**** Human Modification
+:PROPERTIES:
+:CUSTOM_ID: human-modification
+:END:
+| Key   | Action                     |
+|-------+----------------------------|
+| =M-t= | Toggle thinking            |
+| =M-T= | Set temperature (prompt)   |
+| =M-p= | Set top-p (prompt)         |
+| =M-m= | Set model (completing-read)|
+
+**** Agent Modification
+:PROPERTIES:
+:CUSTOM_ID: agent-modification
+:END:
+#+begin_src elisp
+(agent-set-api-param 'temperature 0.7)
+(agent-set-api-param 'thinking t)
+(agent-get-api-param 'temperature)
+#+end_src
+
+**** Safety Bounds
+:PROPERTIES:
+:CUSTOM_ID: safety-bounds
+:END:
+#+begin_src elisp
+(defvar agent-api-param-bounds
+  '((temperature . (0.0 . 2.0))
+    (top-p . (0.0 . 1.0))
+    (max-tokens . (1 . 32768))))
+#+end_src
+
+Agent modifications clamped to bounds. Clamping logged in monologue.
+
+*** Refresh Behavior
+:PROPERTIES:
+:CUSTOM_ID: refresh-behavior
+:END:
+- =g= triggers full refresh
+- Cursor position preserved where possible
+- Target: <100ms refresh time
+- No auto-refresh (on-demand only)
+
+Future consideration: auto-refresh after tick completes.
+
+*** Mode Definition
+:PROPERTIES:
+:CUSTOM_ID: mode-definition
+:END:
+#+begin_src elisp
+(define-derived-mode amacs-hub-mode magit-section-mode "AMACS-Hub"
+  "Major mode for AMACS hub dashboard."
+  :group 'amacs
+  (setq-local revert-buffer-function
+              (lambda (_ignore-auto _noconfirm)
+                (amacs-hub-refresh))))
+#+end_src
+
+*** Implementation Status
+:PROPERTIES:
+:CUSTOM_ID: implementation-status
+:END:
+See: [[AI-EPIC-004-amacs-hub-dashboard]]
+
+| IMP | Title           | Status  |
+|-----+-----------------+---------|
+| 029 | Hub Skeleton    | planned |
+| 030 | Hub Navigation  | planned |
+| 031 | Hub Actions     | planned |
+| 032 | API Settings    | planned |
+| 033 | Chat Status Line| planned |
+
+--------------

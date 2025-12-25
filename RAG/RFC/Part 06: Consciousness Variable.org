@@ -4,89 +4,133 @@
 :PROPERTIES:
 :CUSTOM_ID: part-6-consciousness-variable
 :END:
-The =agent-consciousness= plist is working memory. It persists across ticks and is included in every inference context.
+The =agent-consciousness= alist is working memory. It persists across ticks and is included in every inference context.
 
-*** Key Fields
+*** Data Structure: Alists
 :PROPERTIES:
-:CUSTOM_ID: key-fields
+:CUSTOM_ID: data-structure-alists
+:END:
+Consciousness and threads use alists with symbol keys (not plists). This provides:
+- =alist-get= with native default support
+- =setf= for clean mutation
+- Direct JSON mapping without key translation
+- Consistent convention throughout codebase
+
+See: =STYLE.md= for coding conventions.
+
+*** Schema
+:PROPERTIES:
+:CUSTOM_ID: schema
 :END:
 #+begin_src elisp
 (defvar agent-consciousness
-  '(:identity "amacs-instance-1"
+  '((identity . "amacs-instance-1")
     
     ;; Temporal
-    :current-tick 142
-    :current-time "2025-05-26T14:32:00Z"
-    :long-gap-detected nil
+    (current-tick . 142)
+    (current-time . "2025-05-26T14:32:00Z")
+    (long-gap-detected . nil)
     
     ;; Affective
-    :mood :focused
-    :confidence 0.85
+    (mood . "focused")
+    (confidence . 0.85)
     
     ;; Threads
-    :active-thread "rust-debugging"
-    :thread-budget 3
-    :open-threads (...)
-    :completed-threads (...)
+    (active-thread . "rust-debugging")
+    (thread-budget . 3)
+    (open-threads . (...))
+    (completed-threads . (...))
     
     ;; Action history (watchdog signal)
-    :last-actions
-      ((:tick 142 :action "eval-elisp" :confidence 0.85)
-       (:tick 141 :action "retry-same" :confidence 0.65)
-       (:tick 140 :action "retry-same" :confidence 0.45))
+    (last-actions .
+      (((tick . 142) (action . "eval-elisp") (confidence . 0.85))
+       ((tick . 141) (action . "retry-same") (confidence . 0.65))
+       ((tick . 140) (action . "retry-same") (confidence . 0.45))))
+    
+    ;; Context control (agent-modifiable)
+    (chat-context-depth . 5)      ; Recent exchanges to include
+    (monologue-context-depth . 20) ; Recent monologue lines
+    
+    ;; API settings (agent-modifiable)
+    (api-settings .
+      ((temperature . 1.0)
+       (top-p . 1.0)
+       (thinking . nil)
+       (max-tokens . 8192)
+       (model . "anthropic/claude-sonnet-4")))
     
     ;; Context
-    :global-buffers ("*agent-chat*")     ; Always-active (human interface)
-    :recent-monologue ("..." "..." ...)
-    :active-skills (...)
+    (recent-monologue . ("..." "..." ...))
     
     ;; Human interaction
-    :human-review-requested nil
+    (human-review-requested . nil)
+    (current-activity . nil)  ; For status display
     
     ;; Budget
-    :budget (:cost-so-far 2.47 :budget-limit 5.00 :pressure :moderate)))
+    (budget .
+      ((cost-so-far . 2.47)
+       (budget-limit . 5.00)
+       (pressure . "moderate")))))
 #+end_src
 
-*** Thread Structure (Thread-Centric Context)
+*** Accessing State
 :PROPERTIES:
-:CUSTOM_ID: thread-structure-thread-centric-context
+:CUSTOM_ID: accessing-state
+:END:
+#+begin_src elisp
+;; Reading with default
+(alist-get 'mood agent-consciousness "neutral")
+
+;; Writing
+(setf (alist-get 'mood agent-consciousness) "curious")
+
+;; Nested access
+(alist-get 'temperature (alist-get 'api-settings agent-consciousness))
+
+;; Helper functions
+(agent-get 'mood)           ; Shorthand for alist-get
+(agent-set 'mood "focused") ; Shorthand for setf
+#+end_src
+
+*** Thread Structure
+:PROPERTIES:
+:CUSTOM_ID: thread-structure
 :END:
 Threads own their context. Buffer watching is per-thread, not global.
 
 #+begin_src elisp
-(:id "rust-debugging"
- :started-tick 142
- :priority 1
- :concern "Ownership error in main.rs"
- 
- ;; Context ownership (NEW)
- :buffers ("src/main.rs" "Cargo.toml")
- :primary-mode 'rust-mode
- :skill-tags ("rust-mode" "project-amacs")
- :hydrated t                          ; Full content in context when active
- 
- ;; Work state
- :approach "Trying lifetime annotations"
- :blocking t
- 
- ;; Future (Phase 4)
- :active-loras nil)
+'((id . "rust-debugging")
+  (started-tick . 142)
+  (priority . 1)
+  (concern . "Ownership error in main.rs")
+  
+  ;; Context ownership
+  (buffers . ("src/main.rs" "Cargo.toml"))
+  (primary-mode . rust-mode)
+  (bound-skills . ("rust-mode" "project-amacs"))
+  
+  ;; Work state
+  (approach . "Trying lifetime annotations")
+  (blocking . t)
+  
+  ;; Completion (when done)
+  (completed-tick . nil)
+  (evidence . nil)
+  (learned . nil))
 #+end_src
 
-*Hydration states:* - *Active thread*: =:hydrated t= - full buffer contents in context - *Pending threads*: =:hydrated nil= - metadata only (concern, approach)
-
-*Global buffers:*
+*** Buffer Discovery
+:PROPERTIES:
+:CUSTOM_ID: buffer-discovery
+:END:
+Global buffers (chat, scratchpad) are discovered by mode, not name:
 
 #+begin_src elisp
-;; In consciousness (not per-thread)
-:global-buffers ("*agent-chat*")  ; Always active regardless of thread
+(agent-find-buffers-by-mode 'amacs-chat-mode)
+(agent-find-buffers-by-mode 'agent-scratchpad-mode)
 #+end_src
 
-=*agent-chat*= stays globally active - it's the human interface, relevant regardless of focus. Other buffers belong to threads.
-
-See: [[AI-ADR-001-thread-centric-context]]
-
-Threads provide: - Organization (what am I working on?) - Escape valves (switch when stuck) - Completion tracking (what did I learn?)
+Thread buffers are explicit in the thread's =buffers= field.
 
 *** Confidence as Circuit Breaker
 :PROPERTIES:
@@ -105,9 +149,29 @@ Tick 146: retry-same      0.30  ← intervention needed
 *Single low confidence = exploration (fine).*
 *Sustained decline on same action class = alarm signal.*
 
-The human watchdog monitors the confidence heat map, not self-reported mood.
+*** API Self-Modification
+:PROPERTIES:
+:CUSTOM_ID: api-self-modification
+:END:
+Agent can adjust its own inference parameters:
+
+#+begin_src elisp
+;; "I need to think harder about this"
+(agent-set-api-param 'thinking t)
+
+;; "This is creative work, more randomness"
+(agent-set-api-param 'temperature 1.2)
+
+;; "Precision needed"
+(agent-set-api-param 'temperature 0.3)
+#+end_src
+
+Safety bounds prevent extreme values:
+#+begin_src elisp
+(defvar agent-api-param-bounds
+  '((temperature . (0.0 . 2.0))
+    (top-p . (0.0 . 1.0))
+    (max-tokens . (1 . 32768))))
+#+end_src
 
 --------------
-
-
-

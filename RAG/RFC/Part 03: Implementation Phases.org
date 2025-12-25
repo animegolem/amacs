@@ -6,14 +6,15 @@
 :END:
 
 *** Phase Summary
-| Phase | Name              | Focus                    | Infrastructure        | Status    |
-|-------+-------------------+--------------------------+-----------------------+-----------|
-|     1 | Vampire Simulator | Cognitive loop           | Single machine        | ✅ Done   |
-|    1b | First Breath      | LLM integration          | Single machine + API  | ✅ Done   |
-|     2 | Hands and Arms    | Motor control (eval)     | Single machine        | 📋 Current|
-|     3 | Bicameral Split   | Security boundaries      | Proxmox + LXC         | 📋 Next   |
-|     4 | Neural Memory     | Long-term retrieval      | + GPU training        | 📋 Future |
-|     5 | Ghost in Shell    | Desktop embodiment       | + EXWM VM             | 📋 Future |
+| Phase | Name              | Focus                    | Infrastructure        | Status       |
+|-------+-------------------+--------------------------+-----------------------+--------------|
+|     1 | Vampire Simulator | Cognitive loop           | Single machine        | ✅ Done      |
+|    1b | First Breath      | LLM integration          | Single machine + API  | ✅ Done      |
+|     2 | Hands and Arms    | Motor control (eval)     | Single machine        | ✅ Done      |
+|   2.5 | Observability     | Hub + polish             | Single machine        | 📋 Current   |
+|     3 | Bicameral Split   | Security boundaries      | Proxmox + LXC         | 📋 Next      |
+|     4 | Neural Memory     | Long-term retrieval      | + GPU training        | 📋 Future    |
+|     5 | Ghost in Shell    | Desktop embodiment       | + EXWM VM             | 📋 Future    |
 
 Key principle: Infrastructure complexity is deferred until the cognitive loop is proven.
 
@@ -59,11 +60,13 @@ See: [[AI-EPIC-001b-first-breath]]
 
 --------------
 
-*** Phase 2: Hands and Arms (Current)
+*** Phase 2: Hands and Arms ✅ COMPLETE
 :PROPERTIES:
 :CUSTOM_ID: phase-2-hands-and-arms
 :END:
 *Goal:* Give the agent motor control. It can perceive and think; now it needs to act.
+
+*Status:* Complete. 103/103 tests passing after field test remediation.
 
 **** The Core Insight
 :PROPERTIES:
@@ -96,9 +99,11 @@ Reference: [[https://blog.cloudflare.com/code-mode/][Cloudflare: Code Mode - The
 :END:
 #+begin_src
 Body → Brain (JSON):
-  - consciousness (mood, confidence, threads)
-  - buffer contents (serialized text)
+  - consciousness (full alist state)
+  - buffer contents (mode-based discovery)
   - last eval result
+  - recent chat (depth controlled by consciousness)
+  - recent monologue (depth controlled by consciousness)
 
 Brain → Body (JSON):
   - eval: elisp to evaluate
@@ -110,28 +115,72 @@ Brain → Body (JSON):
 
 That's it. No action schemas. No tool definitions. Just: show state, get elisp, eval it.
 
-**** Skills as Documentation
+**** Field Test Results (61 Ticks with Sonnet)
 :PROPERTIES:
-:CUSTOM_ID: phase-2-skills-as-docs
+:CUSTOM_ID: phase-2-field-test
 :END:
-Skills don't constrain - they teach. The bootstrap skill explains:
-- How to interact with buffers (switch, read, write)
-- How to use eshell
-- How to define persistent functions
-- Common elisp patterns and gotchas
+| What Worked              | What Broke                           |
+|--------------------------+--------------------------------------|
+| Eval execution           | Chat buffer discovery (naming bug)   |
+| Consciousness persistence| Context truncation (4000 char limit) |
+| Buffer manipulation      | Skill loading unclear                |
+| Error recovery           | Chat format confusing                |
 
-The agent reads skills like a human reads documentation, then writes whatever elisp it needs.
-
-**** What We Learn
+**** Field Test Remediation (EPIC-003)
 :PROPERTIES:
-:CUSTOM_ID: phase-2-what-we-learn
+:CUSTOM_ID: phase-2-remediation
 :END:
-- Does the agent actually use eval effectively?
-- What elisp patterns emerge?
-- Does it create reusable functions?
-- What breaks when given full eval access?
+| Fix                     | Description                                |
+|-------------------------+--------------------------------------------|
+| Alist migration         | Plist → alist for consciousness & threads  |
+| Mode-based discovery    | Find buffers by mode, not hardcoded names  |
+| Chat redesign           | =#+begin_prompt= blocks, tick-based structure |
+| Context simplification  | No truncation, full state, depth controls  |
+| Scratchpad mode         | Agent working memory persists across ticks |
+| Skill init              | All bootstrap skills copied on init        |
 
-See: [[AI-EPIC-002-hands-and-arms]], [[AI-ADR-002-phase-restructuring-and-code-mode]]
+See: [[AI-EPIC-002-hands-and-arms]], [[AI-EPIC-003-field-test-remediation]], [[AI-ADR-002-phase-restructuring-and-code-mode]]
+
+--------------
+
+*** Phase 2.5: Observability (Current)
+:PROPERTIES:
+:CUSTOM_ID: phase-2-5-observability
+:END:
+*Goal:* Human can observe and interact without writing elisp. Agent can inspect its own state.
+
+**** The Hub
+:PROPERTIES:
+:CUSTOM_ID: phase-2-5-hub
+:END:
+magit-section based dashboard (=*amacs-hub*=) showing:
+- API settings (temperature, thinking, model) - modifiable by human and agent
+- Threads (active/inactive, switch, create, complete)
+- Watched buffers (add/remove like @file)
+- Bound skills
+- Chat navigation (jump to tick)
+- Monologue summary
+- Scratchpad headings
+
+**** Agent Self-Modification
+:PROPERTIES:
+:CUSTOM_ID: phase-2-5-self-mod
+:END:
+#+begin_src elisp
+;; Agent can adjust its own inference
+(agent-set-api-param 'temperature 0.7)
+(agent-set-api-param 'thinking t)
+#+end_src
+
+Bounds prevent extreme values. Human can override via hub.
+
+**** Chat Status Line
+:PROPERTIES:
+:CUSTOM_ID: phase-2-5-status
+:END:
+Real-time display of tick progress and current activity in chat buffer header.
+
+See: [[AI-EPIC-004-amacs-hub-dashboard]], [[Part 21: AMACS Hub]]
 
 --------------
 
@@ -244,7 +293,18 @@ No training on monologue self-reports (hallucination risk).
 
 Neural retrieval changes /what/ is remembered, not /who/ is reasoning.
 
-See: [[AI-RFC-Phase-4-Neural-Episodic-Memory]] in parking-lot.org
+**** Unified Workspace Enables Training
+:PROPERTIES:
+:CUSTOM_ID: phase-4-unified-workspace
+:END:
+Because all work happens in =~/.agent/workspace/=, git commits contain both:
+- Narrative (monologue entry, consciousness state)
+- Work products (actual code/document changes)
+
+The bi-encoder can embed commits that answer "when did I fix the ownership bug" 
+by matching on both the narrative AND the code diff.
+
+See: [[AI-RFC-Phase-4-Neural-Episodic-Memory]] in parking-lot.org, [[Part 7: Memory Architecture]]
 
 --------------
 
@@ -283,21 +343,21 @@ See: [[AI-RFC-Phase-4-Neural-Episodic-Memory]] in parking-lot.org
 Thread completion captures what was attempted, what happened, and what was learned:
 
 #+begin_src elisp
-(:id "rust-ownership-fix"
- :started-tick 142
- :concern "Ownership error in main.rs"
- :goal "Fix ownership error so cargo build passes"
- :deliverable "cargo build succeeds with no errors"
- :thread-type :deliverable           ; vs :exploratory
- 
- ;; On completion:
- :completion-tick 158
- :completion-evidence
-   (:cargo-output "Compiling amacs v0.1.0... Finished"
-    :test-results "4/4 passed"
-    :files-changed ("src/main.rs")
-    :approach-that-worked "Added explicit 'static lifetime")
- :learned "'static lifetime needed when returning references from functions")
+'((id . "rust-ownership-fix")
+  (started-tick . 142)
+  (concern . "Ownership error in main.rs")
+  (goal . "Fix ownership error so cargo build passes")
+  (deliverable . "cargo build succeeds with no errors")
+  (thread-type . deliverable)           ; vs exploratory
+  
+  ;; On completion:
+  (completion-tick . 158)
+  (completion-evidence .
+    ((cargo-output . "Compiling amacs v0.1.0... Finished")
+     (test-results . "4/4 passed")
+     (files-changed . ("src/main.rs"))
+     (approach-that-worked . "Added explicit 'static lifetime")))
+  (learned . "'static lifetime needed when returning references from functions"))
 #+end_src
 
 No monetary rewards or penalties - just structured evidence that feeds Phase 4 training.
