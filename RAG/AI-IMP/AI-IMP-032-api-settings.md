@@ -7,12 +7,12 @@ tags:
   - api
   - settings
   - self-modification
-kanban_status: planned
-depends_on: 
+kanban_status: complete
+depends_on:
   - AI-IMP-029
-confidence_score: 0.8
+confidence_score: 0.95
 created_date: 2025-12-25
-close_date:
+close_date: 2025-12-30
 --- 
 
 # AI-IMP-032: API Settings Section
@@ -150,4 +150,8 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+1. **Circular require avoided** - `agent-api.el` can't require `agent-consciousness.el` directly due to load order. Used `declare-function` and `fboundp` check in `agent--build-request-body` to handle gracefully when consciousness isn't loaded yet.
+
+2. **Thinking parameter format** - OpenRouter/Claude API uses `thinking: {type: "enabled"}` format rather than simple boolean. Implemented accordingly in `agent--build-request-body`.
+
+3. **Model override vs default** - Model in api-settings is nil by default (uses `agent-model` global). User can set override via hub, or clear it to return to default.

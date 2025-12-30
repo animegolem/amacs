@@ -73,6 +73,7 @@ Agent needs full self-visibility for effective self-management."
     ;; Context controls
     (chat-context-depth . ,(agent-get 'chat-context-depth))
     (monologue-context-depth . ,(agent-get 'monologue-context-depth))
+    (scratchpad-context-depth . ,(agent-get 'scratchpad-context-depth))
     (global-buffers . ,(agent-get 'global-buffers))
     (focus . ,(agent-get 'focus))
     ;; Memory pointers
@@ -135,12 +136,15 @@ Respects agent-controlled depth settings from consciousness."
          (pending-threads (agent-get-pending-threads))
          (global-buffer-names (agent-get-global-buffers))
          (monologue-depth (or (agent-get 'monologue-context-depth) 20))
-         (recent-monologue (seq-take (agent-get 'recent-monologue) monologue-depth)))
+         (recent-monologue (seq-take (agent-get 'recent-monologue) monologue-depth))
+         (scratchpad-depth (or (agent-get 'scratchpad-context-depth) 10))
+         (scratchpad-content (agent-scratchpad-for-context scratchpad-depth)))
 
     `((consciousness . ,(agent-consciousness-for-context))
       (active-thread . ,(agent--build-active-thread-context active-thread))
       (pending-threads . ,(agent--build-pending-threads-context pending-threads))
       (global-buffers . ,(agent-hydrate-buffers global-buffer-names))
+      (scratchpad . ,scratchpad-content)
       (recent-monologue . ,recent-monologue)
       (last-actions . ,(seq-take (agent-get 'last-actions) 10)))))
 

@@ -24,6 +24,10 @@
 (defvar agent-commit-author "Amacs <ghost@machine>"
   "Author string for git commits.")
 
+(defvar agent-commit-delimiter " ‖ "
+  "Delimiter for structured commit messages.
+Uses U+2016 (double vertical line) which is rare in natural text.")
+
 ;;; Git Operations
 
 (defun agent--git-repo-initialized-p ()
@@ -75,16 +79,70 @@ Returns the commit hash or nil on failure."
 
 (defun agent--format-commit-message ()
   "Format the commit message for current tick.
-Format: [TICK N][thread][:mood] monologue-line"
+Format: Tick N ‖ thread ‖ mood ‖ confidence ‖ monologue
+Monologue is last field for greedy capture (handles pipes in text)."
   (let* ((tick (agent-current-tick))
-         (thread (or (agent-active-thread) "no-thread"))
+         (thread-id (agent-active-thread))
+         (thread-name (or thread-id "no-thread"))
          (mood (agent-mood))
+         (confidence (agent-confidence))
          (monologue (car (agent-get :recent-monologue))))
-    (format "[TICK %d][%s][%s] %s"
-            tick
-            thread
-            mood
+    (format "Tick %d%s%s%s%s%s%.2f%s%s"
+            tick agent-commit-delimiter
+            thread-name agent-commit-delimiter
+            mood agent-commit-delimiter
+            confidence agent-commit-delimiter
             (or monologue "tick completed"))))
+
+;;; Commit Parsing and Retrieval
+
+(defun agent--parse-commit-message (msg)
+  "Parse tick commit message MSG into alist.
+Format: Tick N ‖ thread ‖ mood ‖ confidence ‖ monologue...
+Returns alist with tick, thread, mood, confidence, monologue keys."
+  (let ((parts (split-string msg agent-commit-delimiter)))
+    (when (>= (length parts) 5)
+      (let ((tick-str (nth 0 parts)))
+        ;; Extract tick number from "Tick N"
+        (when (string-match "^Tick \\([0-9]+\\)" tick-str)
+          `((tick . ,(string-to-number (match-string 1 tick-str)))
+            (thread . ,(nth 1 parts))
+            (mood . ,(nth 2 parts))
+            (confidence . ,(string-to-number (nth 3 parts)))
+            ;; Monologue is everything from field 5 onward (rejoin if split)
+            (monologue . ,(mapconcat #'identity (nthcdr 4 parts)
+                                     agent-commit-delimiter))))))))
+
+(defun agent-get-tick-commit (tick-number)
+  "Return commit hash for TICK-NUMBER, or nil if not found."
+  (let ((default-directory (expand-file-name agent-git-directory)))
+    (let ((result (string-trim
+                   (shell-command-to-string
+                    (format "git log --oneline --grep='^Tick %d ‖' --format='%%H' -1"
+                            tick-number)))))
+      (unless (string-empty-p result) result))))
+
+(defun agent-get-tick-diff (tick-number)
+  "Return diff string for TICK-NUMBER commit, or nil if not found."
+  (let ((hash (agent-get-tick-commit tick-number)))
+    (when hash
+      (let ((default-directory (expand-file-name agent-git-directory)))
+        (shell-command-to-string
+         (format "git show --stat --patch %s" hash))))))
+
+(defun agent-get-tick-commit-info (tick-number)
+  "Return alist with commit info for TICK-NUMBER.
+Includes hash, parsed message fields, and full commit message."
+  (let ((hash (agent-get-tick-commit tick-number)))
+    (when hash
+      (let* ((default-directory (expand-file-name agent-git-directory))
+             (msg (string-trim
+                   (shell-command-to-string
+                    (format "git log -1 --format='%%s' %s" hash))))
+             (parsed (agent--parse-commit-message msg)))
+        (when parsed
+          (cons `(hash . ,hash)
+                (cons `(full-message . ,msg) parsed)))))))
 
 ;;; The Tick Function
 

@@ -40,9 +40,16 @@
 \\{amacs-chat-mode-map}"
   :lighter " AMACS"
   :keymap amacs-chat-mode-map
-  (when amacs-chat-mode
-    ;; Add prompt template when mode is enabled
-    (agent-chat--setup-tempo)))
+  (if amacs-chat-mode
+      (progn
+        ;; Add prompt template when mode is enabled
+        (agent-chat--setup-tempo)
+        ;; Setup status line (IMP-033)
+        (amacs-chat--setup-status-line)
+        ;; Cleanup on buffer kill
+        (add-hook 'kill-buffer-hook #'amacs-chat--cleanup-on-kill nil t))
+    ;; Mode disabled
+    (remove-hook 'kill-buffer-hook #'amacs-chat--cleanup-on-kill t)))
 
 ;;; Tempo Template for Prompt Blocks
 
@@ -299,6 +306,75 @@ Sets up org-mode and amacs-chat-mode with proper structure."
         (insert "Use <h TAB to insert a prompt block.\n\n")
         (insert "#+begin_prompt\n\n#+end_prompt\n")))
     buf))
+
+;;; Status Line (IMP-033)
+
+(defvar amacs-chat--status-timer nil
+  "Timer for updating chat status line during inference.")
+
+(defface amacs-chat-status-line
+  '((t :inherit header-line :weight bold))
+  "Face for chat status line."
+  :group 'amacs)
+
+(defface amacs-chat-status-active
+  '((t :inherit header-line :foreground "green" :weight bold))
+  "Face for active inference status."
+  :group 'amacs)
+
+(defun amacs-chat--status-line ()
+  "Generate status line for chat buffer header."
+  (let ((tick (agent-current-tick))
+        (mood (agent-mood))
+        (in-progress (agent-inference-in-progress-p))
+        (activity (agent-current-activity)))
+    (if in-progress
+        (propertize
+         (format " Tick %d: %s  |  Mood: %s "
+                 tick
+                 (or activity "thinking...")
+                 mood)
+         'face 'amacs-chat-status-active)
+      (propertize
+       (format " Idle at tick %d  |  Mood: %s "
+               tick
+               mood)
+       'face 'amacs-chat-status-line))))
+
+(defun amacs-chat--setup-status-line ()
+  "Setup header line for chat buffer status."
+  (setq-local header-line-format '(:eval (amacs-chat--status-line))))
+
+(defun amacs-chat--start-status-updates ()
+  "Start timer to update status line during inference."
+  (unless amacs-chat--status-timer
+    (setq amacs-chat--status-timer
+          (run-with-timer 0.3 0.3 #'amacs-chat--update-status))))
+
+(defun amacs-chat--update-status ()
+  "Force redisplay of status line in all chat buffers."
+  (dolist (buf (buffer-list))
+    (when (buffer-local-value 'amacs-chat-mode buf)
+      (with-current-buffer buf
+        (force-mode-line-update)))))
+
+(defun amacs-chat--stop-status-updates ()
+  "Stop status update timer."
+  (when amacs-chat--status-timer
+    (cancel-timer amacs-chat--status-timer)
+    (setq amacs-chat--status-timer nil)
+    ;; Final update to show idle state
+    (amacs-chat--update-status)))
+
+(defun amacs-chat--cleanup-on-kill ()
+  "Cleanup timer when last chat buffer is killed."
+  (let ((chat-count 0))
+    (dolist (buf (buffer-list))
+      (when (and (not (eq buf (current-buffer)))
+                 (buffer-local-value 'amacs-chat-mode buf))
+        (cl-incf chat-count)))
+    (when (= chat-count 0)
+      (amacs-chat--stop-status-updates))))
 
 (provide 'agent-chat)
 ;;; agent-chat.el ends here

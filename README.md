@@ -13,7 +13,7 @@ An experiment in LLM embodiment: an AI agent living in Emacs with persistent con
 - Communicates via org-mode chat
 - Binds skills to threads
 
-80 tests passing. CI validates byte-compilation and test suite.
+113 tests passing. CI validates byte-compilation and test suite.
 
 ## Quick Start
 
@@ -47,8 +47,9 @@ harness/               # Core elisp - the agent's "nervous system"
   agent-inference.el       # Prompt building, API calls, response parsing
   agent-chat.el            # Human-agent chat interface
   agent-monologue.el       # Episodic memory
-  agent-tick.el            # Tick system
-  test-harness.el          # Test suite (80 tests)
+  agent-tick.el            # Tick system, git commits
+  amacs-hub.el             # Hub dashboard (requires magit-section)
+  test-harness.el          # Test suite (113 tests)
   ci-check.sh              # CI pipeline
 
 skills/                # Skills the agent can use
@@ -114,6 +115,25 @@ Skills extend agent capabilities with domain knowledge:
 
 Core skill is always in system prompt. Other skills bind to threads.
 
+## Hub Dashboard
+
+The hub provides a unified view of agent state using `magit-section`:
+
+```elisp
+;; Requires magit-section (install via MELPA)
+M-x package-install RET magit-section RET
+
+;; Open hub
+(require 'amacs-hub)
+M-x amacs-hub
+
+;; Key bindings
+TAB - Expand/collapse section inline
+g   - Refresh hub
+```
+
+Shows: status, threads, buffers, skills, chat history, monologue, scratchpad.
+
 ## Agent Runtime
 
 The agent lives in `~/.agent/`:
@@ -128,12 +148,25 @@ The agent lives in `~/.agent/`:
 
 ## Configuration
 
+API key can be configured in order of priority:
+
+### 1. Environment Variable (highest priority, good for CI)
 ```bash
-# Environment variables (preferred)
 export OPENROUTER_API_KEY="sk-or-v1-..."
 export OPENROUTER_MODEL="anthropic/claude-sonnet-4"  # optional
+```
 
-# Or create ~/.agent/config.el
+### 2. Auth-Source (recommended, encrypted)
+Add to `~/.authinfo.gpg`:
+```
+machine openrouter.ai login amacs password sk-or-v1-your-key-here
+```
+
+Or use macOS Keychain / GNOME Keyring - Emacs auth-source will find it.
+
+### 3. Config File (lowest priority)
+```elisp
+;; ~/.agent/config.el
 (setq agent-api-key "sk-or-v1-...")
 (setq agent-model "anthropic/claude-3-haiku")
 ```

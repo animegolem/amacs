@@ -187,6 +187,33 @@ ARGS is a plist with :evidence and :learned keys."
       (message "Completed thread: %s (learned: %s)" thread-id learned)
       thread)))
 
+(defun agent-archive-thread (thread-id)
+  "Archive THREAD-ID without completion data.
+Used to remove threads that are no longer relevant.
+Unlike complete, this doesn't prompt for evidence/learned."
+  (let* ((thread (agent-get-thread thread-id))
+         (open-threads (agent-get 'open-threads))
+         (completed-threads (agent-get 'completed-threads)))
+    (when thread
+      ;; Mark as archived (not completed)
+      (setf (alist-get 'archived thread) t)
+      (setf (alist-get 'archived-tick thread) (agent-current-tick))
+      (setf (alist-get 'hydrated thread) nil)
+
+      ;; Move from open to completed (archived threads go here too)
+      (agent-set 'open-threads
+                 (seq-filter (lambda (thr)
+                               (not (equal (alist-get 'id thr) thread-id)))
+                             open-threads))
+      (agent-set 'completed-threads (cons thread completed-threads))
+
+      ;; If this was active, clear active
+      (when (equal (agent-get 'active-thread) thread-id)
+        (agent-set 'active-thread nil))
+
+      (message "Archived thread: %s" thread-id)
+      thread)))
+
 ;;; Thread Summaries (for dehydrated context)
 
 (defun agent-thread-summary (thread)

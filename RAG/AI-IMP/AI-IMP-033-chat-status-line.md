@@ -6,12 +6,12 @@ tags:
   - chat
   - status-line
   - observability
-kanban_status: planned
-depends_on: 
+kanban_status: complete
+depends_on:
   - AI-EPIC-003
-confidence_score: 0.9
+confidence_score: 0.95
 created_date: 2025-12-25
-close_date:
+close_date: 2025-12-30
 --- 
 
 # AI-IMP-033: Chat Status Line
@@ -154,4 +154,8 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+1. **Timer cleanup** - Used `unwind-protect` in `agent-think` to ensure timer stops even on error. Also added `kill-buffer-hook` to clean up when last chat buffer is killed.
+
+2. **Forward declarations** - `agent-inference.el` needs to call chat timer functions but can't require `agent-chat.el`. Used `declare-function` for `amacs-chat--start-status-updates` and `amacs-chat--stop-status-updates`.
+
+3. **Face visibility** - Created distinct faces `amacs-chat-status-line` (idle) and `amacs-chat-status-active` (green, during inference) for clear visual feedback.

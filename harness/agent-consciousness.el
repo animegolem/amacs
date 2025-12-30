@@ -76,6 +76,10 @@ Uses symbol keys for clean alist-get access patterns."
     (human-review-requested . nil)
     (chat-pending . nil)
 
+    ;; Inference tracking (for status line)
+    (inference-in-progress . nil)
+    (current-activity . nil)
+
     ;; Eval tracking
     (last-eval-result . nil)
 
@@ -87,7 +91,16 @@ Uses symbol keys for clean alist-get access patterns."
 
     ;; Context depth controls (agent can adjust these)
     (chat-context-depth . 5)
-    (monologue-context-depth . 20)))
+    (monologue-context-depth . 20)
+    (scratchpad-context-depth . 10)  ; last N headings, 0 = all
+
+    ;; API settings (agent can modify for self-tuning)
+    (api-settings . ((temperature . 1.0)
+                     (top-p . 1.0)
+                     (top-k . nil)
+                     (thinking . nil)
+                     (max-tokens . 8192)
+                     (model . nil)))))  ; nil = use agent-model default
 
 ;;; Persistence
 
@@ -260,6 +273,75 @@ Maintains a rolling window of last 20 actions."
 (defun agent-human-review-pending-p ()
   "Return t if a human review is pending."
   (alist-get 'requested (agent-get 'human-review-requested)))
+
+;;; Inference Tracking (IMP-033)
+
+(defun agent-inference-in-progress-p ()
+  "Return t if inference is currently in progress."
+  (agent-get 'inference-in-progress))
+
+(defun agent-current-activity ()
+  "Return current activity description, or nil if idle."
+  (agent-get 'current-activity))
+
+(defun agent-set-activity (activity)
+  "Set current ACTIVITY description. Pass nil to clear."
+  (agent-set 'current-activity activity))
+
+(defun agent-start-inference ()
+  "Mark inference as in progress."
+  (agent-set 'inference-in-progress t)
+  (agent-set 'current-activity "Starting..."))
+
+(defun agent-end-inference ()
+  "Mark inference as complete."
+  (agent-set 'inference-in-progress nil)
+  (agent-set 'current-activity nil))
+
+;;; API Settings (IMP-032)
+
+(defvar agent-api-param-bounds
+  '((temperature . (0.0 . 2.0))
+    (top-p . (0.0 . 1.0))
+    (top-k . (1 . 100))
+    (max-tokens . (1 . 32768)))
+  "Min/max bounds for numeric API parameters.")
+
+(defun agent-get-api-param (param)
+  "Get API PARAM from consciousness api-settings.
+PARAM should be a symbol like temperature, top-p, thinking, model."
+  (let ((settings (agent-get 'api-settings)))
+    (alist-get param settings)))
+
+(defun agent-set-api-param (param value)
+  "Set API PARAM to VALUE in consciousness, with bounds checking.
+Numeric params are clamped to bounds defined in `agent-api-param-bounds'.
+Returns the (possibly clamped) value that was set."
+  (let* ((settings (or (agent-get 'api-settings) '()))
+         (bounds (alist-get param agent-api-param-bounds))
+         (final-value value))
+    ;; Apply bounds for numeric params
+    (when (and bounds (numberp value))
+      (let ((min-val (car bounds))
+            (max-val (cdr bounds)))
+        (when (< value min-val)
+          (setq final-value min-val)
+          (message "Clamped %s to minimum: %s" param min-val))
+        (when (> value max-val)
+          (setq final-value max-val)
+          (message "Clamped %s to maximum: %s" param max-val))))
+    ;; Update settings
+    (setf (alist-get param settings) final-value)
+    (agent-set 'api-settings settings)
+    final-value))
+
+(defun agent-api-settings ()
+  "Return current API settings as alist.
+Returns merged settings from consciousness, with defaults."
+  (or (agent-get 'api-settings)
+      '((temperature . 1.0)
+        (top-p . 1.0)
+        (max-tokens . 8192))))
 
 (provide 'agent-consciousness)
 ;;; agent-consciousness.el ends here

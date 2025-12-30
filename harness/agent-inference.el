@@ -28,6 +28,8 @@
 
 ;; Forward declarations to avoid circular requires
 (declare-function agent--load-thread-skills "agent-skills")
+(declare-function amacs-chat--start-status-updates "agent-chat")
+(declare-function amacs-chat--stop-status-updates "agent-chat")
 (defvar agent-initialized)
 (declare-function agent-init "agent-core")
 (declare-function agent-load-config "agent-core")
@@ -338,57 +340,71 @@ This is the main entry point for inference."
   (unless (agent-api-configured-p)
     (user-error "API not configured. Set OPENROUTER_API_KEY or create ~/.agent/config.el"))
 
+  ;; Start inference tracking (IMP-033)
+  (agent-start-inference)
+  (amacs-chat--start-status-updates)
+
   (let* ((tick (agent-increment-tick))
          (messages (agent-format-messages))
          (thread-id (or (agent-get :active-thread) "no-thread"))
          (mood (agent-mood)))
 
     (message "Tick %d: Thinking..." tick)
+    (agent-set-activity "Calling API...")
 
     ;; Make API call
     (let* ((response (agent-api-call messages))
+           (_ (agent-set-activity "Processing response..."))
            (parsed (agent-process-response response)))
 
-      (if (not parsed)
-          ;; Error case - still commit but note the failure
-          (progn
-            (agent-append-monologue (format "[ERROR] Inference failed: %s"
-                                            (plist-get response :error)))
-            (agent-persist-consciousness)
-            (agent-git-commit
-             (format "[TICK %d][%s][%s] Inference error"
-                     tick thread-id mood)))
+      (unwind-protect
+          (if (not parsed)
+              ;; Error case - still commit but note the failure
+              (progn
+                (agent-append-monologue (format "[ERROR] Inference failed: %s"
+                                                (plist-get response :error)))
+                (agent-persist-consciousness)
+                (agent-git-commit
+                 (format "[TICK %d][%s][%s] Inference error"
+                         tick thread-id mood)))
 
-        ;; Success - extract fields from parsed response
-        (let* ((monologue-line (or (plist-get parsed :monologue)
-                                   (plist-get parsed :thought)
-                                   "No thought"))
-               (eval-form (plist-get parsed :eval))
-               (summary (if (> (length monologue-line) 80)
-                            (concat (substring monologue-line 0 80) "...")
-                          monologue-line)))
+            ;; Success - extract fields from parsed response
+            (let* ((monologue-line (or (plist-get parsed :monologue)
+                                       (plist-get parsed :thought)
+                                       "No thought"))
+                   (eval-form (plist-get parsed :eval))
+                   (summary (if (> (length monologue-line) 80)
+                                (concat (substring monologue-line 0 80) "...")
+                              monologue-line)))
 
-          ;; Execute eval if present (IMP-018)
-          (let ((eval-result (agent-eval eval-form)))
-            ;; Record result in consciousness
-            (agent-record-eval eval-form eval-result)
-            ;; Log eval to monologue (skipped evals return nil)
-            (when-let* ((eval-log (agent--format-eval-for-monologue
-                                   eval-form eval-result)))
-              (agent-append-monologue eval-log)))
+              (agent-set-activity "Evaluating...")
 
-          ;; Log thought to monologue
-          (agent-append-monologue monologue-line)
+              ;; Execute eval if present (IMP-018)
+              (let ((eval-result (agent-eval eval-form)))
+                ;; Record result in consciousness
+                (agent-record-eval eval-form eval-result)
+                ;; Log eval to monologue (skipped evals return nil)
+                (when-let* ((eval-log (agent--format-eval-for-monologue
+                                       eval-form eval-result)))
+                  (agent-append-monologue eval-log)))
 
-          ;; Persist and commit
-          (agent-persist-consciousness)
-          (agent-git-commit
-           (format "[TICK %d][%s][%s] %s"
-                   tick thread-id (agent-mood) summary))
+              (agent-set-activity "Committing...")
 
-          ;; Display result
-          (message "Tick %d complete. %s" tick summary)
-          parsed)))))
+              ;; Log thought to monologue
+              (agent-append-monologue monologue-line)
+
+              ;; Persist and commit
+              (agent-persist-consciousness)
+              (agent-git-commit
+               (format "[TICK %d][%s][%s] %s"
+                       tick thread-id (agent-mood) summary))
+
+              ;; Display result
+              (message "Tick %d complete. %s" tick summary)
+              parsed))
+        ;; Cleanup - always stop inference tracking
+        (agent-end-inference)
+        (amacs-chat--stop-status-updates)))))
 
 ;;; Inspection
 

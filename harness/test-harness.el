@@ -212,12 +212,62 @@
 (defun test-commit-includes-monologue ()
   "Test: Git commits include monologue content."
   (message "\n--- Test: Commit Includes Monologue ---")
-  
+
   (let* ((default-directory (expand-file-name "~/.agent/"))
          (log (shell-command-to-string "git log --oneline -1")))
     (test-log "commit-has-tick-content"
-              (string-match-p "Tick.*completed" log)
+              (string-match-p "Tick.*‖" log)
               (format "last commit: %s" (string-trim log)))))
+
+(defun test-commit-message-format ()
+  "Test: Commit message format and parsing (IMP-034)."
+  (message "\n--- Test: Commit Message Format (IMP-034) ---")
+
+  ;; Test format generation
+  (let* ((msg (agent--format-commit-message))
+         (has-delimiter (string-match-p "‖" msg))
+         (has-tick (string-match-p "^Tick [0-9]+" msg)))
+    (test-log "format-has-delimiter"
+              has-delimiter
+              (format "message: %s" (substring msg 0 (min 60 (length msg)))))
+    (test-log "format-has-tick-prefix"
+              has-tick
+              "starts with Tick N"))
+
+  ;; Test parsing a well-formed message
+  (let* ((sample "Tick 42 ‖ rust-debugging ‖ focused ‖ 0.85 ‖ Testing the parser")
+         (parsed (agent--parse-commit-message sample)))
+    (test-log "parse-returns-alist"
+              (listp parsed)
+              "returns a list")
+    (test-log "parse-tick-correct"
+              (= 42 (alist-get 'tick parsed))
+              (format "tick = %s" (alist-get 'tick parsed)))
+    (test-log "parse-thread-correct"
+              (equal "rust-debugging" (alist-get 'thread parsed))
+              (format "thread = %s" (alist-get 'thread parsed)))
+    (test-log "parse-mood-correct"
+              (equal "focused" (alist-get 'mood parsed))
+              (format "mood = %s" (alist-get 'mood parsed)))
+    (test-log "parse-confidence-correct"
+              (= 0.85 (alist-get 'confidence parsed))
+              (format "confidence = %s" (alist-get 'confidence parsed)))
+    (test-log "parse-monologue-correct"
+              (equal "Testing the parser" (alist-get 'monologue parsed))
+              (format "monologue = %s" (alist-get 'monologue parsed))))
+
+  ;; Test parsing with pipes in monologue
+  (let* ((sample "Tick 5 ‖ testing ‖ curious ‖ 0.70 ‖ Checking A | B | C options")
+         (parsed (agent--parse-commit-message sample)))
+    (test-log "parse-handles-pipes-in-monologue"
+              (equal "Checking A | B | C options" (alist-get 'monologue parsed))
+              (format "monologue with pipes = %s" (alist-get 'monologue parsed))))
+
+  ;; Test parsing invalid message
+  (let ((parsed (agent--parse-commit-message "not a valid commit message")))
+    (test-log "parse-rejects-invalid"
+              (null parsed)
+              "returns nil for invalid")))
 
 (defun test-skill-system-init ()
   "Test: Skill system initializes with core skill."
@@ -936,6 +986,7 @@ Run with M-x test-eval-error-handling."
         (test-monologue-append)
         (test-monologue-window-size)
         (test-commit-includes-monologue)
+        (test-commit-message-format)
         (test-skill-tracking)
         (test-relevant-skills)
         (test-thread-switching)
@@ -975,6 +1026,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-monologue-append)
           (test-monologue-window-size)
           (test-commit-includes-monologue)
+          (test-commit-message-format)
           (test-skill-tracking)
           (test-relevant-skills)
           (test-thread-switching)

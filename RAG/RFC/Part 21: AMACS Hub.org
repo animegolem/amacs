@@ -29,10 +29,21 @@ Alternatives considered:
 
 magit-section provides:
 - Granular refresh (update one section without touching others)
-- Built-in collapse/expand (TAB)
+- Built-in collapse/expand with inline content (TAB)
 - Consistent keybinding patterns
 - Read-only by design
 - What magit, forge, diff-hl all use
+
+*** Key Interaction Pattern
+:PROPERTIES:
+:CUSTOM_ID: key-interaction-pattern
+:END:
+| Key | Action                                    |
+|-----+-------------------------------------------|
+| TAB | Expand/collapse inline (review in hub)    |
+| RET | Jump to source (edit, full context)       |
+
+This matches magit's UX: review diffs inline, or jump to the file.
 
 *** Section Hierarchy
 :PROPERTIES:
@@ -50,27 +61,97 @@ amacs-hub-section (root)
 ├── amacs-skills-section
 │   └── amacs-skill-section (per skill)
 ├── amacs-chat-section
-│   └── amacs-chat-date-section
-│       └── amacs-chat-tick-section
+│   └── amacs-chat-buffer-section
+│       └── amacs-chat-date-section
+│           └── amacs-chat-tick-section (TAB: human+agent content)
 ├── amacs-monologue-section
-│   └── amacs-monologue-entry-section
+│   └── amacs-monologue-date-section
+│       └── amacs-monologue-tick-section (TAB: narrative+eval+diff)
 └── amacs-scratchpad-section
-    └── amacs-scratchpad-heading-section
+    └── amacs-scratchpad-buffer-section
+        └── amacs-scratchpad-heading-section (TAB: heading content)
 #+end_example
 
-*** Data Sources
+*** Monologue as Event Stream
 :PROPERTIES:
-:CUSTOM_ID: data-sources
+:CUSTOM_ID: monologue-as-event-stream
 :END:
-| Section    | Source                                    |
-|------------+-------------------------------------------|
-| Status     | =agent-consciousness= (mood, tick, api-settings) |
-| Threads    | =agent-consciousness= open-threads, active-thread |
-| Buffers    | Active thread's =buffers= field           |
-| Skills     | Active thread's =bound-skills= field      |
-| Chat       | Parse =amacs-chat-mode= buffers for tick headings |
-| Monologue  | Recent lines from =monologue.org=         |
-| Scratchpad | Parse =agent-scratchpad-mode= buffer headings |
+Each tick entry stores narrative + action. TAB expands to show:
+
+#+begin_example
+*** Tick 43 [focused] Investigating lifetime annotations
+    ↓ TAB expands:
+    Narrative: Investigating lifetime annotations, trying 'static
+    
+    Eval: (goto-char 1042)
+    Result: success
+    
+    Diff:
+    --- a/workspace/rust-app/src/main.rs
+    +++ b/workspace/rust-app/src/main.rs
+    @@ -42,1 +42,1 @@
+    -fn get_name(&self) -> &str {
+    +fn get_name(&self) -> &'static str {
+#+end_example
+
+Git diff retrieved from commit associated with that tick. True event-sourcing: thought + action visible together.
+
+**** Commit Message Format
+:PROPERTIES:
+:CUSTOM_ID: commit-message-format
+:END:
+Each tick creates a commit in =~/.agent/= with structured message:
+
+#+begin_example
+Tick 42 ‖ rust-debugging ‖ focused ‖ 0.85 ‖ Investigating lifetime annotations
+#+end_example
+
+Format: =Tick {N} ‖ {thread} ‖ {mood} ‖ {confidence} ‖ {monologue}=
+
+Delimiter =‖= (U+2016) is rare in natural text. Monologue is last field for greedy capture (handles pipes in text).
+
+Hub parses git log to find commits by tick number:
+#+begin_src elisp
+(agent-get-tick-diff 42)  ; returns diff for tick 42
+#+end_src
+
+*** Scratchpad with Depth Control
+:PROPERTIES:
+:CUSTOM_ID: scratchpad-with-depth-control
+:END:
+Scratchpad requires minimal structure: org headings only. Content is freeform.
+
+#+begin_example
+* agent-scratchpad (depth: 10)
+** scratchpad.org
+*** Goals
+*** Notes on lifetimes
+*** Random observations
+    ↓ TAB expands:
+    These are just some random thoughts...
+#+end_example
+
+**** Depth Control
+:PROPERTIES:
+:CUSTOM_ID: depth-control
+:END:
+| Key | Action                                |
+|-----+---------------------------------------|
+| =+= | Increase scratchpad-context-depth     |
+| =-= | Decrease scratchpad-context-depth     |
+
+Uses same pattern as chat and monologue: last N headings included in context (0 = all).
+
+Storage in consciousness:
+#+begin_src elisp
+((scratchpad-context-depth . 10))  ; last 10 headings, 0 = all
+#+end_src
+
+Agent can also control via elisp:
+#+begin_src elisp
+(agent-set 'scratchpad-context-depth 5)  ; last 5 headings
+(agent-set 'scratchpad-context-depth 0)  ; all headings
+#+end_src
 
 *** Navigation (RET)
 :PROPERTIES:
@@ -82,7 +163,7 @@ amacs-hub-section (root)
 | Buffer     | =switch-to-buffer-other-window=           |
 | Skill      | =find-file-other-window= on SKILL.md      |
 | Chat tick  | Jump to =* Tick N= heading in chat buffer |
-| Monologue  | Jump to line in monologue.org             |
+| Monologue  | Jump to entry in monologue.org            |
 | Scratchpad | Jump to heading in scratchpad buffer      |
 
 Hub remains visible; target opens in other window.
@@ -93,11 +174,13 @@ Hub remains visible; target opens in other window.
 :END:
 Context-sensitive based on current section:
 
-| Key | Threads Section | Buffers Section | Skills Section |
-|-----+-----------------+-----------------+----------------|
-| =a= | Create thread   | Add buffer      | Bind skill     |
-| =k= | Archive thread  | Remove buffer   | Unbind skill   |
-| =c= | Complete thread | —               | —              |
+| Key   | Threads Section | Buffers Section | Skills Section | Scratchpad       |
+|-------+-----------------+-----------------+----------------+------------------|
+| =a=   | Create thread   | Add buffer      | Bind skill     | —                |
+| =k=   | Archive thread  | Remove buffer   | Unbind skill   | —                |
+| =c=   | Complete thread | —               | —              | —                |
+| =+=   | —               | —               | —              | Increase depth   |
+| =-=   | —               | —               | —              | Decrease depth   |
 
 *** API Settings Section
 :PROPERTIES:
@@ -173,12 +256,13 @@ Future consideration: auto-refresh after tick completes.
 :END:
 See: [[AI-EPIC-004-amacs-hub-dashboard]]
 
-| IMP | Title           | Status  |
-|-----+-----------------+---------|
-| 029 | Hub Skeleton    | planned |
-| 030 | Hub Navigation  | planned |
-| 031 | Hub Actions     | planned |
-| 032 | API Settings    | planned |
-| 033 | Chat Status Line| planned |
+| IMP | Title                      | Status  |
+|-----+----------------------------+---------|
+| 029 | Hub Skeleton               | planned |
+| 030 | Hub Navigation             | planned |
+| 031 | Hub Actions                | planned |
+| 032 | API Settings               | planned |
+| 033 | Chat Status Line           | planned |
+| 034 | Git Integration (Commits)  | planned |
 
 --------------

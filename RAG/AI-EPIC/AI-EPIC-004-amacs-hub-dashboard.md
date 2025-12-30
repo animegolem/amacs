@@ -8,14 +8,15 @@ tags:
   - magit-section
   - observability
 date_created: 2025-12-25
-date_completed: 
-kanban-status: planned
-AI_IMP_spawned: 
+date_completed: 2025-12-30
+kanban-status: complete
+AI_IMP_spawned:
   - AI-IMP-029
   - AI-IMP-030
   - AI-IMP-031
   - AI-IMP-032
   - AI-IMP-033
+  - AI-IMP-034
 ---
 
 # AI-EPIC-004: AMACS Hub Dashboard
@@ -46,34 +47,50 @@ Build `amacs-hub` - a magit-section based dashboard providing:
 
 **Active Skills Section:** Thread-bound skills with bind/unbind
 
-**Chat Section:** Navigation-only - tick numbers grouped by date, RET jumps to tick in chat buffer
+**Chat Section:** Ticks grouped by date. TAB expands to show human+agent exchange inline. RET jumps to source.
 
-**Monologue Section:** Recent entries, RET jumps to line in monologue.org
+**Monologue Section (Event Stream):** Each tick shows narrative line. TAB expands to show:
+- Narrative (monologue line)
+- Eval expression + result
+- Git diff from that tick's commit
 
-**Scratchpad Section:** Headings from scratchpad buffers, RET jumps to heading
+This makes monologue the true event-sourced view: thought + action in one place.
 
-Additionally, a **chat status line** showing current tick and in-progress monologue as ephemeral footer.
+**Scratchpad Section:** Org headings from scratchpad buffers. TAB expands to show heading content. Uses depth control (`scratchpad-context-depth`) like chat/monologue - last N headings included in context (0 = all).
+
+Additionally, a **chat status line** showing current tick and in-progress monologue as ephemeral header.
 
 Uses `magit-section` for:
 - Granular refresh (update sections independently)
-- Built-in collapse/expand
+- Built-in collapse/expand with inline content (TAB)
 - Consistent keybinding patterns
 - Read-only display with action affordances
+
+### Key Interaction Pattern
+
+| Key | Action |
+|-----|--------|
+| TAB | Expand/collapse inline (review without leaving hub) |
+| RET | Jump to source (edit, full context) |
+
+This matches magit's actual UX - you can review diffs inline, or jump to the file.
 
 ## Path(s) Not Taken
 
 - **Org-mode hub:** Considered but org conflates display with editing. Hub should be read-only with explicit actions.
-- **Full content in hub:** Chat/monologue content stays in source buffers. Hub is navigation, not duplication.
-- **Automatic buffer attachment:** Human explicitly adds buffers. Agent can request via chat but human confirms.
+- **Full source buffer duplication:** Content shown inline via TAB, but editing happens in source buffers via RET.
+- **Automatic buffer attachment:** Human explicitly adds buffers. Agent can autonomously watch buffers but human sees in hub.
 
 ## Success Metrics
 
 1. Human can see full agent state in single buffer
-2. Human can switch threads, add buffers, trigger ticks without elisp
-3. Agent can read and modify API parameters
-4. RET navigation works throughout hub
-5. Hub refresh is fast (<100ms) and doesn't lose cursor position
-6. Chat status line shows real-time tick progress
+2. Human can review chat exchanges without leaving hub (TAB)
+3. Human can see narrative + code changes together in monologue (TAB)
+4. Human can switch threads, add buffers, trigger ticks without elisp
+5. Agent can read and modify API parameters
+6. Agent can control which scratchpad headings feed into context
+7. Hub refresh is fast (<100ms) and doesn't lose cursor position
+8. Chat status line shows real-time tick progress
 
 **Validation:** Use hub as primary interface for 50+ tick session.
 
@@ -91,16 +108,22 @@ Uses `magit-section` for:
 - [ ] FR-8: Watched buffers section shows current thread's buffers
 - [ ] FR-9: `a` on buffers section prompts to add buffer
 - [ ] FR-10: `k` on buffer removes from thread
-- [ ] FR-11: RET on buffer jumps to buffer
+- [ ] FR-11: RET on buffer opens buffer in other window
 - [ ] FR-12: Skills section shows thread-bound skills
-- [ ] FR-13: Chat section shows ticks grouped by date (no content)
-- [ ] FR-14: RET on tick jumps to tick heading in chat buffer
-- [ ] FR-15: Monologue section shows recent N entries
-- [ ] FR-16: RET on monologue entry jumps to line in file
-- [ ] FR-17: Scratchpad section shows headings from scratchpad buffers
-- [ ] FR-18: `g` refreshes hub
-- [ ] FR-19: TAB toggles section collapse
-- [ ] FR-20: Chat buffer has status line showing current tick + ephemeral monologue
+- [ ] FR-13: Chat section shows ticks grouped by date
+- [ ] FR-14: TAB on chat tick expands human+agent exchange inline
+- [ ] FR-15: RET on chat tick jumps to tick heading in chat buffer
+- [ ] FR-16: Monologue section shows recent tick entries
+- [ ] FR-17: TAB on monologue tick expands narrative + eval + git diff inline
+- [ ] FR-18: RET on monologue tick jumps to entry in monologue.org
+- [ ] FR-19: Scratchpad section shows org headings from scratchpad buffers
+- [ ] FR-20: TAB on scratchpad heading expands content inline
+- [ ] FR-21: RET on scratchpad heading jumps to heading in buffer
+- [ ] FR-22: Scratchpad context controlled by `scratchpad-context-depth` (last N headings, 0 = all)
+- [ ] FR-23: Hub shows scratchpad depth setting and allows adjustment
+- [ ] FR-24: Only last N scratchpad headings (per depth) feed into inference context
+- [ ] FR-25: `g` refreshes hub
+- [ ] FR-26: Chat buffer has status line showing current tick + ephemeral monologue
 
 ### Non-Functional Requirements
 
@@ -109,26 +132,33 @@ Uses `magit-section` for:
 - NFR-3: magit-section is only new dependency
 - NFR-4: Hub works in terminal Emacs (no GUI-only features)
 - NFR-5: Keybindings documented in `?` help
+- NFR-6: Scratchpad requires only org headings (any level), content is freeform
 
 ## Implementation Breakdown
 
 | IMP | Title | Status | Dependencies |
 |-----|-------|--------|--------------|
-| AI-IMP-029 | Hub Skeleton | planned | EPIC-003 |
-| AI-IMP-030 | Hub Navigation | planned | IMP-029 |
-| AI-IMP-031 | Hub Actions | planned | IMP-030 |
-| AI-IMP-032 | API Settings Section | planned | IMP-029 |
-| AI-IMP-033 | Chat Status Line | planned | EPIC-003 |
+| AI-IMP-029 | Hub Skeleton | **complete** | EPIC-003 |
+| AI-IMP-030 | Hub Navigation | **complete** | IMP-029 |
+| AI-IMP-031 | Hub Actions | **complete** | IMP-030 |
+| AI-IMP-032 | API Settings Section | **complete** | IMP-029 |
+| AI-IMP-033 | Chat Status Line | **complete** | EPIC-003 |
+| AI-IMP-034 | Git Integration (Tick Commits) | **complete** | EPIC-003 |
 
 **Dependency Graph:**
 ```
 EPIC-003 (Field Test Remediation)
-    ↓
-IMP-029 (Hub Skeleton)
-    ↓
-IMP-030 (Navigation) ──→ IMP-031 (Actions)
-    ↓
-IMP-032 (API Settings)
-
-EPIC-003 ──→ IMP-033 (Chat Status Line) [parallel]
+    ├──→ IMP-034 (Git Integration - tick commits)
+    │        ↓
+    ├──→ IMP-029 (Hub Skeleton + inline expansion) ←─ uses IMP-034 for monologue diffs
+    │        ↓
+    │    IMP-030 (Navigation - RET to source)
+    │        ↓
+    │    IMP-031 (Actions + scratchpad depth)
+    │        ↓
+    │    IMP-032 (API Settings)
+    │
+    └──→ IMP-033 (Chat Status Line) [parallel]
 ```
+
+**Note:** IMP-029 can start without IMP-034 (show placeholder for diffs), but full monologue+diff requires git integration.

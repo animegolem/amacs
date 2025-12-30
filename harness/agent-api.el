@@ -20,6 +20,11 @@
 (require 'url)
 (require 'json)
 (require 'cl-lib)
+(require 'auth-source)
+
+;; Forward declarations to avoid circular require
+(declare-function agent-get-api-param "agent-consciousness")
+(declare-function agent-api-settings "agent-consciousness")
 
 ;;; Configuration Variables
 
@@ -41,19 +46,40 @@ Can override via OPENROUTER_MODEL env var or config file.")
 (defvar agent-api-max-tokens 1024
   "Maximum tokens in response.")
 
+;;; Auth-Source Integration (IMP-035)
+
+(defun agent--get-api-key-from-auth-source ()
+  "Retrieve API key from auth-source (authinfo.gpg, keychain, etc).
+Searches for host openrouter.ai with user amacs."
+  (when-let* ((found (car (auth-source-search
+                           :host "openrouter.ai"
+                           :user "amacs"
+                           :require '(:secret)
+                           :max 1))))
+    (let ((secret (plist-get found :secret)))
+      (if (functionp secret)
+          (funcall secret)
+        secret))))
+
 ;;; Config Loading
 
 (defun agent-load-config ()
   "Load API configuration from environment variables and/or config file.
-Priority: env vars > config file > defaults.
+Priority: env vars > auth-source > config file > defaults.
 Returns t if API key is available."
-  ;; First, try config file (lower priority, can be overridden)
+  ;; First, try config file (lowest priority)
   (let ((config-file (expand-file-name "~/.agent/config.el")))
     (when (file-exists-p config-file)
       (load config-file t t)
       (message "Loaded agent config from %s" config-file)))
 
-  ;; Then, env vars override (higher priority)
+  ;; Then, try auth-source (medium priority)
+  (unless agent-api-key
+    (when-let* ((auth-key (agent--get-api-key-from-auth-source)))
+      (setq agent-api-key auth-key)
+      (message "Using API key from auth-source")))
+
+  ;; Finally, env vars override all (highest priority)
   (when-let* ((env-key (getenv "OPENROUTER_API_KEY")))
     (setq agent-api-key env-key)
     (message "Using API key from OPENROUTER_API_KEY env var"))
@@ -89,9 +115,35 @@ Returns t if API key is available."
 
 ;;; HTTP Request
 
-(defun agent-api-call (messages &optional temperature)
-  "Call the API with MESSAGES array and optional TEMPERATURE.
-MESSAGES should be a list of alists with role and content keys.
+(defun agent--build-request-body (messages)
+  "Build API request body using consciousness settings.
+MESSAGES is the messages array to send."
+  (let* ((settings (when (fboundp 'agent-api-settings) (agent-api-settings)))
+         (temp (or (alist-get 'temperature settings) 1.0))
+         (top-p (alist-get 'top-p settings))
+         (top-k (alist-get 'top-k settings))
+         (max-tok (or (alist-get 'max-tokens settings) agent-api-max-tokens))
+         (model-override (alist-get 'model settings))
+         (thinking (alist-get 'thinking settings))
+         (model (or model-override agent-model))
+         (body `((model . ,model)
+                 (messages . ,(vconcat messages))
+                 (max_tokens . ,max-tok)
+                 (temperature . ,temp))))
+    ;; Add optional params only if set
+    (when top-p
+      (push `(top_p . ,top-p) body))
+    (when top-k
+      (push `(top_k . ,top-k) body))
+    ;; Thinking parameter for models that support it
+    (when thinking
+      (push `(thinking . ((type . "enabled"))) body))
+    body))
+
+(defun agent-api-call (messages &optional _temperature)
+  "Call the API with MESSAGES array.
+Parameters are read from consciousness api-settings.
+The optional _TEMPERATURE argument is deprecated, use api-settings instead.
 
 Returns a plist:
   :content  - The assistant's response text (or nil on error)
@@ -110,12 +162,7 @@ Returns a plist:
             ("Authorization" . ,(concat "Bearer " agent-api-key))
             ("HTTP-Referer" . "https://github.com/anthropics/amacs")
             ("X-Title" . "AMACS Agent")))
-         (request-body
-          (agent--json-encode
-           `((model . ,agent-model)
-             (messages . ,(vconcat messages))
-             (max_tokens . ,agent-api-max-tokens)
-             (temperature . ,(or temperature 0.7)))))
+         (request-body (agent--json-encode (agent--build-request-body messages)))
          ;; Must encode as UTF-8 and force unibyte to avoid "Multibyte text in HTTP request"
          (url-request-data (encode-coding-string request-body 'utf-8 t))
          (url-show-status nil)

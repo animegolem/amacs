@@ -72,5 +72,63 @@ Creates the scratchpad if it doesn't exist."
         (get-file-buffer path)
       (agent-create-scratchpad path))))
 
+;;; Scratchpad Heading Extraction (for context assembly)
+
+(defun agent-scratchpad-extract-headings (buffer)
+  "Extract org headings and content from BUFFER.
+Returns list of alists with title, level, content."
+  (when (buffer-live-p buffer)
+    (with-current-buffer buffer
+      (save-excursion
+        (goto-char (point-min))
+        (let ((headings '()))
+          (while (re-search-forward "^\\(\\*+\\) \\(.+\\)$" nil t)
+            (let* ((level (length (match-string 1)))
+                   (title (match-string 2))
+                   (content-begin (1+ (match-end 0)))
+                   (content-end (save-excursion
+                                  (if (re-search-forward "^\\*+ " nil t)
+                                      (match-beginning 0)
+                                    (point-max))))
+                   (content (string-trim
+                             (buffer-substring-no-properties
+                              content-begin content-end))))
+              (push `((title . ,title)
+                      (level . ,level)
+                      (content . ,content))
+                    headings)))
+          (nreverse headings))))))
+
+(defun agent-scratchpad-for-context (&optional depth)
+  "Return scratchpad content for context inclusion.
+DEPTH limits to last N headings (0 or nil = all).
+Returns formatted string for context."
+  (let* ((depth (or depth (agent-get 'scratchpad-context-depth) 10))
+         (scratch-bufs (agent-find-buffers-by-mode 'agent-scratchpad-mode))
+         (all-headings '()))
+    ;; Collect headings from all scratchpad buffers
+    (dolist (buf scratch-bufs)
+      (let ((headings (agent-scratchpad-extract-headings buf)))
+        (setq all-headings (append all-headings headings))))
+    ;; Apply depth limiting (last N headings, 0 = all)
+    (when (and depth (> depth 0) (> (length all-headings) depth))
+      (setq all-headings (last all-headings depth)))
+    ;; Format for context
+    (when all-headings
+      (mapconcat
+       (lambda (h)
+         (let ((title (alist-get 'title h))
+               (level (alist-get 'level h))
+               (content (alist-get 'content h)))
+           (format "%s %s\n%s"
+                   (make-string level ?*)
+                   title
+                   (if (string-empty-p content) "" (concat content "\n")))))
+       all-headings
+       "\n"))))
+
+;; Forward declaration to avoid circular require
+(declare-function agent-get "agent-consciousness")
+
 (provide 'agent-scratchpad)
 ;;; agent-scratchpad.el ends here
