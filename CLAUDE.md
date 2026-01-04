@@ -6,6 +6,7 @@ An experiment in LLM embodiment: an AI agent living in Emacs with persistent con
 
 ```
 harness/           # Core elisp - the agent's "nervous system"
+  amacs-shell.el        # Comint-based human-agent I/O (v4)
   agent-core.el         # Init, tick, coordination
   agent-consciousness.el # Working memory, state management
   agent-threads.el      # Thread lifecycle, hydration
@@ -16,23 +17,24 @@ harness/           # Core elisp - the agent's "nervous system"
   test-harness.el       # Test suite
 
 skills/            # Skills the agent can use
-  amacs-bootstrap-skill/core/  # Bootstrap skill (installed to ~/.agent/skills/core/)
+  amacs-bootstrap-skill/core/  # Core skill = system prompt
 
 RAG/               # Project documentation
+  RFC/             # Architecture RFCs
   AI-EPIC/         # Epic-level planning
   AI-IMP/          # Implementation tickets (like issues)
   AI-ADR/          # Architecture Decision Records
   AI-LOG/          # Work session logs/handoffs
   templates/       # Templates for new docs
-
-amacs-rfc-v3.org   # Full architecture RFC - read for deep context
 ```
 
 ## Current Status
 
-**Phase 1 (Vampire Simulator)**: Complete. 39/39 tests passing.
-**Phase 2 (Hands and Arms)**: In progress. See AI-EPIC-002.
-**CI Pipeline**: Implemented. Run `./harness/ci-check.sh` before commits.
+**Architecture**: Transitioning from v3 (org-mode prompt blocks) to v4 (comint shell).
+**Active Work**: EPIC-005 - Core Loop Rewrite. See `RAG/AI-EPIC/AI-EPIC-005-core-loop-rewrite.md`.
+**CI Pipeline**: Run `./harness/ci-check.sh` before commits.
+
+The v3 code (EPIC-001 through EPIC-004) is functional but field testing revealed buffer navigation complexity. The v4 rewrite simplifies I/O to a single comint shell.
 
 ## RAG Documentation Conventions
 
@@ -79,37 +81,65 @@ Performs:
 ## Key Files to Read
 
 Before major work:
-- `amacs-rfc-v3.org` - Full architecture vision
+- `RAG/RFC/amacs-rfc-v4-transition.md` - Current architecture (v4 comint-based)
+- `RAG/AI-EPIC/AI-EPIC-005-core-loop-rewrite.md` - Active epic
 - `RAG/AI-LOG/` - Latest session handoffs
-- `RAG/AI-IMP/` - Current implementation tickets
+- `draft-prompt.md` - System prompt design (becomes core skill)
 
-For harness understanding:
-- `harness/agent-threads.el` - Thread model
-- `harness/agent-context.el` - Context assembly
-- `skills/amacs-bootstrap-skill/core/SKILL.md` - What agent sees on startup
+For reference (v3, partially superseded):
+- `archive/amacs-rfc-v3.org` - Original architecture vision
+- `harness/agent-threads.el` - Thread model (being updated)
+- `skills/amacs-bootstrap-skill/core/SKILL.md` - Current core skill
 
 ## Agent Runtime Directory
 
 The agent runs in `~/.agent/` which contains:
 - `consciousness.el` - Serialized working memory
-- `monologue.org` - Episodic log
-- `skills/` - Installed skills
+- `agent-chat.org` - Chat history (human/agent pairs per tick)
+- `scratchpad.org` - Agent notes with thread properties
+- `monologue.org` - Episodic log (one line per tick)
+- `skills/` - Installed skills (core/ is the system prompt)
 - `.git/` - Autobiographical memory (every tick commits)
 
 Tests recreate this directory fresh.
 
 ## API Configuration
 
-Set environment variables (preferred):
+Priority: env vars > auth-source > config file > defaults.
+
+**Option 1: Environment variables (preferred for CI)**
 ```bash
 export OPENROUTER_API_KEY="sk-or-v1-..."
 export OPENROUTER_MODEL="anthropic/claude-3.5-sonnet"  # optional
 ```
 
-Or create `~/.agent/config.el` (survives if you don't run tests):
-```elisp
-(setq agent-api-key "sk-or-v1-...")
-(setq agent-model "anthropic/claude-3-haiku")  ; optional, cheaper for testing
+**Option 2: Auth-source (preferred for security)**
+Add to `~/.authinfo.gpg`:
+```
+machine openrouter.ai login amacs password sk-or-v1-...
 ```
 
-Priority: env vars > config file > defaults.
+**Option 3: Config file**
+Create `~/.agent/config.el`:
+```elisp
+(setq agent-api-key "sk-or-v1-...")
+(setq agent-model "anthropic/claude-3-haiku")  ; optional
+```
+
+## V4 Response Format
+
+Agent responses are JSON (see `RAG/RFC/amacs-rfc-v4-transition.md`):
+
+```json
+{
+  "eval": "(elisp)" | null,
+  "reply": "Text for human in comint",
+  "mood": "focused",
+  "confidence": 0.85,
+  "monologue": "One line for git commit",
+  "scratchpad": {"heading": "...", "thread": "id"|null, "content": "..."}
+}
+```
+
+Mandatory: `mood`, `confidence`, `monologue`
+Optional: `eval`, `reply`, `scratchpad`
