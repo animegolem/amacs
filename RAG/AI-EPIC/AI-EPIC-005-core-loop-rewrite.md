@@ -88,7 +88,7 @@ See: `RAG/RFC/amacs-rfc-v4-transition.md` for full architecture.
 
 | IMP | Title | Status | Description |
 |-----|-------|--------|-------------|
-| AI-IMP-036 | Comint Shell | planned | Fake process comint buffer with input capture |
+| AI-IMP-036 | Comint Shell | **complete** | Fake process comint buffer with input capture |
 | AI-IMP-037 | Basic Inference | planned | API call, JSON parse, display reply |
 | AI-IMP-038 | Context Assembly | planned | Consciousness, chat, scratchpad sections |
 | AI-IMP-039 | Serialization | planned | Chat.org and scratchpad.org persistence |
