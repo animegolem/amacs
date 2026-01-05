@@ -8,6 +8,7 @@ tags:
   - comint
 closed_tickets:
   - AI-IMP-036
+  - AI-IMP-037
 created_date: 2025-01-04
 related_files:
   - RAG/RFC/amacs-rfc-v4-transition.md
@@ -60,6 +61,13 @@ Major architecture pivot from v3 (org-mode prompt blocks) to v4 (comint shell).
    - Placeholder response mechanism
    - All 113 tests pass, byte-compile clean
 
+3. **0c9c850** - IMP-037: Basic inference implementation
+   - Wired shell to actual API calls via agent-api.el
+   - Minimal system prompt requiring JSON response
+   - JSON parsing with code fence extraction
+   - Retry mechanism for parse errors (max 2)
+   - All 113 tests pass, byte-compile clean
+
 ## Issues Encountered
 
 **None significant**. The planning session went smoothly with clear requirements gathering via AskUserQuestion. Implementation of IMP-036 had no blockers.
@@ -84,20 +92,18 @@ Formal test integration can happen once more of the pipeline is wired up (IMP-03
 
 ## Next Steps
 
-**Immediate (IMP-037: Basic Inference)**:
-1. Wire `amacs-shell--trigger-inference` to actual API calls
-2. Build minimal system prompt from core skill
-3. Parse JSON response, extract `reply` field
-4. Implement retry on parse error (max 2 retries)
+**Immediate (IMP-038: Context Assembly)**:
+1. Build full context sections (consciousness, chat, scratchpad, buffers, skills)
+2. Replace minimal system prompt with full draft-prompt.md content
+3. Add chat history accumulation for multi-turn context
 
 **Files to read before continuing**:
 - `RAG/RFC/amacs-rfc-v4-transition.md` - architecture reference
-- `RAG/AI-IMP/AI-IMP-037-basic-inference.md` - next ticket
-- `harness/amacs-shell.el` - current implementation
-- `harness/agent-api.el` - existing API client to reuse
-
-**Key integration point**: The placeholder `amacs-shell--placeholder-response` needs to be replaced with real API call → JSON parse → display flow.
+- `RAG/AI-IMP/AI-IMP-038-context-assembly.md` - next ticket
+- `harness/amacs-shell.el` - current implementation (now has inference)
+- `harness/agent-context.el` - existing context assembly to adapt
 
 **Open questions for next session**:
 - Should we stream responses or show all at once?
 - How to handle multi-line human input in comint?
+- Chat history storage: in-memory list vs immediate org file persistence?
