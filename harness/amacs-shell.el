@@ -19,6 +19,7 @@
 
 (require 'comint)
 (require 'json)
+(require 'cl-lib)
 
 ;; Forward declarations to avoid circular requires
 (declare-function agent-api-call "agent-api")
@@ -45,6 +46,16 @@ Plist with :reply :mood :confidence :monologue :eval :scratchpad.")
 
 (defvar amacs-shell--max-retries 2
   "Maximum number of retries for JSON parse errors.")
+
+(defvar amacs-shell--chat-history nil
+  "List of completed chat exchanges.
+Each entry is a plist (:human STRING :agent STRING :tick NUMBER).")
+
+(defvar amacs-shell--chat-context-depth 5
+  "Number of prior exchanges to include in context.")
+
+(defvar amacs-shell--current-tick 0
+  "Current tick number for this shell session.")
 
 ;;; Mode Definition
 
@@ -89,12 +100,12 @@ Human input is captured and processed by the AMACS harness.
 ;;; System Prompt
 
 (defvar amacs-shell--system-prompt
-  "You are AMACS, an AI agent in Emacs. Respond with valid JSON.
+  "You are AMACS (Agentic Macros), an AI agent embodied in Emacs.
 
 CRITICAL: Your response MUST be valid JSON with these fields:
-- \"mood\": string (required) - your current mood
+- \"mood\": string (required) - your current mood (e.g., \"focused\", \"curious\")
 - \"confidence\": number 0.0-1.0 (required) - confidence in your response
-- \"monologue\": string (required) - one line for memory log
+- \"monologue\": string (required) - one line for memory log / git commit
 - \"reply\": string (optional) - your response to the human
 - \"eval\": string or null (optional) - elisp to execute
 
@@ -106,9 +117,73 @@ Example response:
   \"confidence\": 0.85,
   \"monologue\": \"Greeted the human, exploring the system\"
 }
-```"
-  "Minimal system prompt for basic inference.
-Full context assembly comes in IMP-038.")
+```
+
+The context below shows your current state, chat history, and any notes.
+Use this to maintain continuity across turns."
+  "System prompt for AMACS shell.")
+
+;;; Context Building (IMP-038)
+
+(defun amacs-shell--format-consciousness ()
+  "Format current consciousness state for context."
+  (format "<agent-consciousness>
+tick: %d
+mood: %s
+confidence: %.2f
+chat-depth: %d
+</agent-consciousness>"
+          amacs-shell--current-tick
+          (or (plist-get amacs-shell--last-response :mood) "awakening")
+          (or (plist-get amacs-shell--last-response :confidence) 0.5)
+          amacs-shell--chat-context-depth))
+
+(defun amacs-shell--format-chat-history ()
+  "Format chat history for context, respecting depth limit."
+  (let* ((history (reverse amacs-shell--chat-history))  ; oldest first
+         (depth amacs-shell--chat-context-depth)
+         (recent (if (> (length history) depth)
+                     (last history depth)
+                   history))
+         (formatted (mapconcat
+                     (lambda (exchange)
+                       (format "Human: %s\nAgent: %s"
+                               (plist-get exchange :human)
+                               (plist-get exchange :agent)))
+                     recent
+                     "\n\n")))
+    (if (string-empty-p formatted)
+        ""
+      (format "<chat>\n%s\n</chat>" formatted))))
+
+(defun amacs-shell--format-monologue ()
+  "Format recent monologue entries for context."
+  (let* ((entries (mapcar (lambda (ex) (plist-get ex :monologue))
+                          (last amacs-shell--chat-history 10)))
+         (filtered (seq-filter #'identity entries)))
+    (if filtered
+        (format "<monologue>\n%s\n</monologue>"
+                (mapconcat #'identity filtered "\n"))
+      "")))
+
+(defun amacs-shell--build-context (pending-message)
+  "Build full context string with PENDING-MESSAGE."
+  (let ((consciousness (amacs-shell--format-consciousness))
+        (chat (amacs-shell--format-chat-history))
+        (monologue (amacs-shell--format-monologue)))
+    (concat consciousness "\n\n"
+            (unless (string-empty-p chat) (concat chat "\n\n"))
+            (unless (string-empty-p monologue) (concat monologue "\n\n"))
+            "Human: " pending-message)))
+
+(defun amacs-shell--record-exchange (human-msg agent-reply monologue)
+  "Record completed exchange with HUMAN-MSG, AGENT-REPLY, and MONOLOGUE."
+  (cl-incf amacs-shell--current-tick)
+  (push (list :human human-msg
+              :agent agent-reply
+              :monologue monologue
+              :tick amacs-shell--current-tick)
+        amacs-shell--chat-history))
 
 ;;; Input Handling
 
@@ -158,14 +233,18 @@ Stores input for harness to process and triggers inference."
        (content
         (let ((parsed (amacs-shell--parse-response content)))
           (if parsed
-              ;; Success - show reply
-              (progn
+              ;; Success - show reply and record exchange
+              (let ((reply (or (plist-get parsed :reply)
+                               (format "[No reply. Mood: %s]"
+                                       (plist-get parsed :mood)))))
                 (setq amacs-shell--last-response parsed)
-                (amacs-shell--insert-response
-                 (or (plist-get parsed :reply)
-                     (format "[No reply. Mood: %s, Confidence: %.2f]"
-                             (plist-get parsed :mood)
-                             (plist-get parsed :confidence))))
+                ;; Record exchange in history
+                (amacs-shell--record-exchange
+                 amacs-shell--pending-input
+                 reply
+                 (plist-get parsed :monologue))
+                ;; Display reply
+                (amacs-shell--insert-response reply)
                 (setq amacs-shell--processing nil)
                 (setq amacs-shell--pending-input nil))
             ;; Parse error - retry if possible
@@ -208,11 +287,16 @@ Please respond with ONLY valid JSON. Error in: %s]"
      (content
       (let ((parsed (amacs-shell--parse-response content)))
         (if parsed
-            (progn
+            (let ((reply (or (plist-get parsed :reply)
+                             (format "[No reply. Mood: %s]"
+                                     (plist-get parsed :mood)))))
               (setq amacs-shell--last-response parsed)
-              (amacs-shell--insert-response
-               (or (plist-get parsed :reply)
-                   (format "[No reply. Mood: %s]" (plist-get parsed :mood))))
+              ;; Record exchange
+              (amacs-shell--record-exchange
+               amacs-shell--pending-input
+               reply
+               (plist-get parsed :monologue))
+              (amacs-shell--insert-response reply)
               (setq amacs-shell--processing nil)
               (setq amacs-shell--pending-input nil))
           ;; Still failing - check retry count
@@ -231,12 +315,12 @@ Please respond with ONLY valid JSON. Error in: %s]"
 ;;; Message Building
 
 (defun amacs-shell--build-messages (user-input)
-  "Build messages array with USER-INPUT.
-Uses minimal system prompt for now (full context in IMP-038)."
-  `(((role . "system")
-     (content . ,amacs-shell--system-prompt))
-    ((role . "user")
-     (content . ,user-input))))
+  "Build messages array with USER-INPUT and full context."
+  (let ((context (amacs-shell--build-context user-input)))
+    `(((role . "system")
+       (content . ,amacs-shell--system-prompt))
+      ((role . "user")
+       (content . ,context)))))
 
 ;;; Response Parsing
 
