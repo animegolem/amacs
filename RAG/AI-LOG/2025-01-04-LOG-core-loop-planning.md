@@ -9,6 +9,7 @@ tags:
 closed_tickets:
   - AI-IMP-036
   - AI-IMP-037
+  - AI-IMP-038
 created_date: 2025-01-04
 related_files:
   - RAG/RFC/amacs-rfc-v4-transition.md
@@ -68,6 +69,13 @@ Major architecture pivot from v3 (org-mode prompt blocks) to v4 (comint shell).
    - Retry mechanism for parse errors (max 2)
    - All 113 tests pass, byte-compile clean
 
+4. **99ef8b3** - IMP-038: Context assembly implementation
+   - In-memory chat history with depth limiting
+   - Consciousness, chat, monologue sections
+   - Exchange recording after successful inference
+   - MVP focused (scratchpad/buffers/skills deferred)
+   - All 113 tests pass, byte-compile clean
+
 ## Issues Encountered
 
 **None significant**. The planning session went smoothly with clear requirements gathering via AskUserQuestion. Implementation of IMP-036 had no blockers.
@@ -92,18 +100,22 @@ Formal test integration can happen once more of the pipeline is wired up (IMP-03
 
 ## Next Steps
 
-**Immediate (IMP-038: Context Assembly)**:
-1. Build full context sections (consciousness, chat, scratchpad, buffers, skills)
-2. Replace minimal system prompt with full draft-prompt.md content
-3. Add chat history accumulation for multi-turn context
+**Immediate (IMP-039: Serialization)**:
+1. Persist chat history to agent-chat.org
+2. Persist scratchpad to scratchpad.org with thread properties
+3. Load on warm start
+
+**Remaining EPIC-005 IMPs**:
+- IMP-039: Serialization
+- IMP-040: Eval Execution
+- IMP-041: Thread Management
+- IMP-042: Git Integration
 
 **Files to read before continuing**:
 - `RAG/RFC/amacs-rfc-v4-transition.md` - architecture reference
-- `RAG/AI-IMP/AI-IMP-038-context-assembly.md` - next ticket
-- `harness/amacs-shell.el` - current implementation (now has inference)
-- `harness/agent-context.el` - existing context assembly to adapt
+- `RAG/AI-IMP/AI-IMP-039-serialization.md` - next ticket
+- `harness/amacs-shell.el` - current implementation (has full context now)
 
 **Open questions for next session**:
 - Should we stream responses or show all at once?
 - How to handle multi-line human input in comint?
-- Chat history storage: in-memory list vs immediate org file persistence?
