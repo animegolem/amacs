@@ -18,6 +18,12 @@
 ;;; Code:
 
 (require 'comint)
+(require 'json)
+
+;; Forward declarations to avoid circular requires
+(declare-function agent-api-call "agent-api")
+(declare-function agent-api-configured-p "agent-api")
+(declare-function agent-load-config "agent-api")
 
 ;;; Variables
 
@@ -32,6 +38,13 @@
 
 (defvar amacs-shell--processing nil
   "Non-nil when inference is in progress.")
+
+(defvar amacs-shell--last-response nil
+  "Last parsed response from the agent.
+Plist with :reply :mood :confidence :monologue :eval :scratchpad.")
+
+(defvar amacs-shell--max-retries 2
+  "Maximum number of retries for JSON parse errors.")
 
 ;;; Mode Definition
 
@@ -73,6 +86,30 @@ Human input is captured and processed by the AMACS harness.
   ;; We don't want cat to echo anything
   nil)
 
+;;; System Prompt
+
+(defvar amacs-shell--system-prompt
+  "You are AMACS, an AI agent in Emacs. Respond with valid JSON.
+
+CRITICAL: Your response MUST be valid JSON with these fields:
+- \"mood\": string (required) - your current mood
+- \"confidence\": number 0.0-1.0 (required) - confidence in your response
+- \"monologue\": string (required) - one line for memory log
+- \"reply\": string (optional) - your response to the human
+- \"eval\": string or null (optional) - elisp to execute
+
+Example response:
+```json
+{
+  \"reply\": \"Hello! I'm AMACS, ready to help.\",
+  \"mood\": \"curious\",
+  \"confidence\": 0.85,
+  \"monologue\": \"Greeted the human, exploring the system\"
+}
+```"
+  "Minimal system prompt for basic inference.
+Full context assembly comes in IMP-038.")
+
 ;;; Input Handling
 
 (defun amacs-shell--input-sender (_proc input)
@@ -84,25 +121,158 @@ Stores input for harness to process and triggers inference."
   (amacs-shell--trigger-inference))
 
 (defun amacs-shell--trigger-inference ()
-  "Trigger inference for pending input.
-For now, just shows a placeholder. Full inference in IMP-037."
+  "Trigger inference for pending input."
   (when (and amacs-shell--pending-input
              (not (string-empty-p amacs-shell--pending-input))
              (not amacs-shell--processing))
     (setq amacs-shell--processing t)
     ;; Show thinking indicator
-    (amacs-shell--insert-output "\n[Processing...]\n")
-    ;; TODO: Actual inference call goes here (IMP-037)
-    ;; For now, just show placeholder response
-    (run-at-time 0.1 nil #'amacs-shell--placeholder-response)))
+    (amacs-shell--insert-output "\n[Thinking...]\n")
+    ;; Run inference (async-ish via run-at-time to let UI update)
+    (run-at-time 0.01 nil #'amacs-shell--do-inference 0)))
 
-(defun amacs-shell--placeholder-response ()
-  "Insert placeholder response. Replaced by real inference in IMP-037."
-  (amacs-shell--insert-response
-   (format "I received: \"%s\"\n\n(This is a placeholder. Real inference coming in IMP-037.)"
-           amacs-shell--pending-input))
-  (setq amacs-shell--pending-input nil)
-  (setq amacs-shell--processing nil))
+(defun amacs-shell--do-inference (retry-count)
+  "Execute inference with RETRY-COUNT for error recovery."
+  (require 'agent-api)
+  ;; Ensure API is configured
+  (agent-load-config)
+  (if (not (agent-api-configured-p))
+      (progn
+        (amacs-shell--insert-response
+         "[Error: API not configured. Set OPENROUTER_API_KEY or create ~/.agent/config.el]")
+        (setq amacs-shell--processing nil)
+        (setq amacs-shell--pending-input nil))
+    ;; Build messages and call API
+    (let* ((messages (amacs-shell--build-messages amacs-shell--pending-input))
+           (response (agent-api-call messages))
+           (content (plist-get response :content))
+           (api-error (plist-get response :error)))
+      (cond
+       ;; API error
+       (api-error
+        (amacs-shell--insert-response
+         (format "[API Error: %s]" api-error))
+        (setq amacs-shell--processing nil)
+        (setq amacs-shell--pending-input nil))
+       ;; Parse the response
+       (content
+        (let ((parsed (amacs-shell--parse-response content)))
+          (if parsed
+              ;; Success - show reply
+              (progn
+                (setq amacs-shell--last-response parsed)
+                (amacs-shell--insert-response
+                 (or (plist-get parsed :reply)
+                     (format "[No reply. Mood: %s, Confidence: %.2f]"
+                             (plist-get parsed :mood)
+                             (plist-get parsed :confidence))))
+                (setq amacs-shell--processing nil)
+                (setq amacs-shell--pending-input nil))
+            ;; Parse error - retry if possible
+            (if (< retry-count amacs-shell--max-retries)
+                (progn
+                  (amacs-shell--update-status
+                   (format "[Parse error, retrying %d/%d...]"
+                           (1+ retry-count) amacs-shell--max-retries))
+                  (run-at-time 0.1 nil #'amacs-shell--do-inference-retry
+                               (1+ retry-count) content))
+              ;; Max retries exceeded
+              (amacs-shell--insert-response
+               (format "[Parse error after %d retries. Raw response:\n%s]"
+                       amacs-shell--max-retries
+                       (substring content 0 (min 500 (length content)))))
+              (setq amacs-shell--processing nil)
+              (setq amacs-shell--pending-input nil)))))
+       ;; No content
+       (t
+        (amacs-shell--insert-response "[No response from API]")
+        (setq amacs-shell--processing nil)
+        (setq amacs-shell--pending-input nil))))))
+
+(defun amacs-shell--do-inference-retry (retry-count failed-response)
+  "Retry inference with RETRY-COUNT, informing agent of FAILED-RESPONSE."
+  (require 'agent-api)
+  (let* ((retry-prompt (format "%s\n\n[Your previous response was not valid JSON. \
+Please respond with ONLY valid JSON. Error in: %s]"
+                               amacs-shell--pending-input
+                               (substring failed-response 0 (min 200 (length failed-response)))))
+         (messages (amacs-shell--build-messages retry-prompt))
+         (response (agent-api-call messages))
+         (content (plist-get response :content))
+         (api-error (plist-get response :error)))
+    (cond
+     (api-error
+      (amacs-shell--insert-response (format "[API Error on retry: %s]" api-error))
+      (setq amacs-shell--processing nil)
+      (setq amacs-shell--pending-input nil))
+     (content
+      (let ((parsed (amacs-shell--parse-response content)))
+        (if parsed
+            (progn
+              (setq amacs-shell--last-response parsed)
+              (amacs-shell--insert-response
+               (or (plist-get parsed :reply)
+                   (format "[No reply. Mood: %s]" (plist-get parsed :mood))))
+              (setq amacs-shell--processing nil)
+              (setq amacs-shell--pending-input nil))
+          ;; Still failing - check retry count
+          (if (< retry-count amacs-shell--max-retries)
+              (run-at-time 0.1 nil #'amacs-shell--do-inference-retry
+                           (1+ retry-count) content)
+            (amacs-shell--insert-response
+             (format "[Parse error after %d retries]" amacs-shell--max-retries))
+            (setq amacs-shell--processing nil)
+            (setq amacs-shell--pending-input nil)))))
+     (t
+      (amacs-shell--insert-response "[No response on retry]")
+      (setq amacs-shell--processing nil)
+      (setq amacs-shell--pending-input nil)))))
+
+;;; Message Building
+
+(defun amacs-shell--build-messages (user-input)
+  "Build messages array with USER-INPUT.
+Uses minimal system prompt for now (full context in IMP-038)."
+  `(((role . "system")
+     (content . ,amacs-shell--system-prompt))
+    ((role . "user")
+     (content . ,user-input))))
+
+;;; Response Parsing
+
+(defun amacs-shell--extract-json (text)
+  "Extract JSON from TEXT, handling markdown code fences."
+  (let ((trimmed (string-trim text)))
+    ;; Try to extract from ```json ... ``` block
+    (if (string-match "```\\(?:json\\)?[ \t]*\n?\\(\\(?:.\\|\n\\)*?\\)\n?```" trimmed)
+        (string-trim (match-string 1 trimmed))
+      trimmed)))
+
+(defun amacs-shell--parse-response (text)
+  "Parse TEXT as JSON response.
+Returns plist with :reply :mood :confidence :monologue :eval :scratchpad,
+or nil if parsing fails."
+  (condition-case err
+      (let* ((json-text (amacs-shell--extract-json text))
+             (json-object (json-parse-string json-text
+                                             :object-type 'plist
+                                             :null-object nil)))
+        ;; Validate required fields
+        (if (and (plist-get json-object :mood)
+                 (plist-get json-object :confidence)
+                 (plist-get json-object :monologue))
+            (list :reply (plist-get json-object :reply)
+                  :mood (plist-get json-object :mood)
+                  :confidence (plist-get json-object :confidence)
+                  :monologue (plist-get json-object :monologue)
+                  :eval (plist-get json-object :eval)
+                  :scratchpad (plist-get json-object :scratchpad))
+          ;; Missing required fields
+          (message "JSON missing required fields (mood/confidence/monologue)")
+          nil))
+    (error
+     (message "JSON parse error: %s" (error-message-string err))
+     nil)))
 
 ;;; Output Handling
 
@@ -114,6 +284,18 @@ For now, just shows a placeholder. Full inference in IMP-037."
         (let ((inhibit-read-only t)
               (proc (get-buffer-process buf)))
           (goto-char (process-mark proc))
+          (insert text)
+          (set-marker (process-mark proc) (point)))))))
+
+(defun amacs-shell--update-status (text)
+  "Update the status line (replace current line with TEXT)."
+  (let ((buf (get-buffer amacs-shell-buffer-name)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((inhibit-read-only t)
+              (proc (get-buffer-process buf)))
+          (goto-char (process-mark proc))
+          (delete-region (line-beginning-position) (point))
           (insert text)
           (set-marker (process-mark proc) (point)))))))
 

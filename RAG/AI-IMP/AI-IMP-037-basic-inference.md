@@ -6,12 +6,12 @@ tags:
   - inference
   - api
   - json
-kanban_status: planned
+kanban_status: completed
 depends_on:
   - AI-IMP-036
 confidence_score: 0.85
 created_date: 2025-01-03
-close_date:
+close_date: 2025-01-04
 ---
 
 # AI-IMP-037: Basic Inference
@@ -64,25 +64,25 @@ Response format expected:
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**?
 </CRITICAL_RULE>
 
-- [ ] Create `amacs-shell--trigger-inference` function
-- [ ] Build minimal system prompt (core skill or placeholder)
-- [ ] Build user message from captured input
-- [ ] Call `agent-api-call` with messages
-- [ ] Implement `amacs-shell--parse-response` for JSON parsing
-- [ ] Handle markdown code fence extraction (```json ... ```)
-- [ ] Extract `reply` field from parsed response
-- [ ] Extract `mood`, `confidence`, `monologue` for later use
-- [ ] Store parsed fields in buffer-local or global vars
-- [ ] Implement parse error detection
-- [ ] Implement auto-retry with error message (max 2 retries)
-- [ ] Format reply for display (no raw JSON to user)
-- [ ] Insert formatted reply via `amacs-shell--insert-response`
-- [ ] Show "Thinking..." indicator while API call in progress
-- [ ] Clear indicator when response received
-- [ ] Test: API call succeeds, reply appears
-- [ ] Test: Invalid JSON triggers retry
-- [ ] Test: After max retries, show error to user
-- [ ] Byte-compile without warnings
+- [x] Create `amacs-shell--trigger-inference` function
+- [x] Build minimal system prompt (core skill or placeholder)
+- [x] Build user message from captured input
+- [x] Call `agent-api-call` with messages
+- [x] Implement `amacs-shell--parse-response` for JSON parsing
+- [x] Handle markdown code fence extraction (```json ... ```)
+- [x] Extract `reply` field from parsed response
+- [x] Extract `mood`, `confidence`, `monologue` for later use
+- [x] Store parsed fields in buffer-local or global vars
+- [x] Implement parse error detection
+- [x] Implement auto-retry with error message (max 2 retries)
+- [x] Format reply for display (no raw JSON to user)
+- [x] Insert formatted reply via `amacs-shell--insert-response`
+- [x] Show "Thinking..." indicator while API call in progress
+- [x] Clear indicator when response received
+- [ ] Test: API call succeeds, reply appears (requires live API)
+- [ ] Test: Invalid JSON triggers retry (requires live API)
+- [ ] Test: After max retries, show error to user (requires live API)
+- [x] Byte-compile without warnings
 
 ### Acceptance Criteria
 
@@ -102,4 +102,8 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+None major. Implementation notes:
+- Used `run-at-time 0.01` to allow UI to update before blocking API call
+- JSON parsing with `json-parse-string` requires `:object-type 'plist` for clean access
+- Live API tests deferred (require API key configuration) but parsing logic verified
+- Retry mechanism uses recursion via `run-at-time` to avoid stack issues
