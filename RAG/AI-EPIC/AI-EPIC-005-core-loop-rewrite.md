@@ -7,8 +7,8 @@ tags:
   - comint
   - rewrite
 date_created: 2025-01-03
-date_completed:
-kanban-status: planned
+date_completed: 2025-01-05
+kanban-status: completed
 AI_IMP_spawned:
   - AI-IMP-036
   - AI-IMP-037
@@ -91,7 +91,9 @@ See: `RAG/RFC/amacs-rfc-v4-transition.md` for full architecture.
 | AI-IMP-036 | Comint Shell | **complete** | Fake process comint buffer with input capture |
 | AI-IMP-037 | Basic Inference | **complete** | API call, JSON parse, display reply |
 | AI-IMP-038 | Context Assembly | **complete** | Consciousness, chat, monologue sections (scratchpad deferred) |
-| AI-IMP-039 | Serialization | planned | Chat.org and scratchpad.org persistence |
-| AI-IMP-040 | Eval Execution | planned | Eval field processing and result feedback |
-| AI-IMP-041 | Thread Management | planned | Create/switch/complete with new ID-first API |
-| AI-IMP-042 | Git Integration | planned | Per-tick commits, format preservation |
+| AI-IMP-039 | Serialization | **complete** | Chat.org and scratchpad.org persistence |
+| AI-IMP-040 | Eval Execution | **complete** | Eval field processing and result feedback |
+| AI-IMP-041 | Thread Management | **complete** | Create/switch/complete with new ID-first API |
+| AI-IMP-042 | Git Integration | **complete** | Per-tick commits, format preservation |
+
+**All 7/7 IMPs complete. EPIC-005 done.**

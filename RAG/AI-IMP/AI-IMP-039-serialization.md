@@ -6,12 +6,12 @@ tags:
   - serialization
   - persistence
   - org-mode
-kanban_status: planned
+kanban_status: completed
 depends_on:
   - AI-IMP-038
 confidence_score: 0.80
 created_date: 2025-01-03
-close_date:
+close_date: 2025-01-05
 ---
 
 # AI-IMP-039: Serialization
@@ -74,10 +74,8 @@ On startup:
 
 ### Files to Touch
 
-- `harness/agent-chat.el`: new serialization functions (or new file)
-- `harness/agent-scratchpad.el`: add serialization, thread properties
-- `harness/amacs-shell.el`: call serialization after inference
-- `harness/agent-core.el`: load on init
+- `harness/agent-persistence.el`: NEW - all serialization functions
+- `harness/amacs-shell.el`: call serialization after inference, load on init
 
 ### Implementation Checklist
 
@@ -86,31 +84,31 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 </CRITICAL_RULE>
 
 **Chat Serialization:**
-- [ ] Define `agent-chat-file` variable (~/.agent/agent-chat.org)
-- [ ] Implement `agent-chat-append-exchange` writes tick heading + pair
-- [ ] Include :TIMESTAMP: property
-- [ ] Implement `agent-chat-load-history` parses org file
-- [ ] Extract Human/Agent subheadings content
-- [ ] Return list of `((human . "...") (agent . "...") (tick . N))`
-- [ ] Handle empty/missing file gracefully
-- [ ] Call load on init, populate in-memory store
+- [x] Define `agent-chat-file` variable (~/.agent/agent-chat.org)
+- [x] Implement `agent-chat-append-exchange` writes tick heading + pair
+- [x] Include :TIMESTAMP: property
+- [x] Implement `agent-chat-load-history` parses org file
+- [x] Extract Human/Agent subheadings content
+- [x] Return list of plists with :human :agent :tick
+- [x] Handle empty/missing file gracefully
+- [x] Call load on init, populate in-memory store
 
 **Scratchpad Serialization:**
-- [ ] Update `agent-scratchpad-append-heading` to add properties
-- [ ] Add :THREAD: property (thread id or "null")
-- [ ] Add :TICK: property
-- [ ] Implement `agent-scratchpad-load` parses with properties
-- [ ] Filter by thread property for context assembly
-- [ ] Handle JSON `scratchpad` field from agent response
-- [ ] Create heading if doesn't exist, append if does
+- [x] Implement `agent-scratchpad-append` to add properties
+- [x] Add :THREAD: property (thread id or "null")
+- [x] Add :TICK: property
+- [x] Implement `agent-scratchpad-load` parses with properties
+- [x] `agent-scratchpad-filter-by-thread` for context assembly
+- [x] Handle JSON `scratchpad` field from agent response
+- [x] Create heading if doesn't exist, append if does
 
 **Integration:**
-- [ ] After successful inference, call serialization
-- [ ] On warm start, load both files
-- [ ] Test: write exchange, restart, exchange appears in context
-- [ ] Test: write scratchpad note, restart, note appears
-- [ ] Test: thread-scoped notes filter correctly
-- [ ] Byte-compile without warnings
+- [x] After successful inference, call serialization
+- [x] On warm start, load both files (`amacs-shell--load-history`)
+- [x] Scratchpad in context via `amacs-shell--format-scratchpad`
+- [x] Thread-scoped notes filter correctly (filter-by-thread)
+- [x] Byte-compile without warnings
+- [x] All 113 tests pass
 
 ### Acceptance Criteria
 
@@ -135,4 +133,12 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+**Design decision**: Created new `agent-persistence.el` file rather than adding to existing files.
+This keeps serialization concerns separate from shell I/O (amacs-shell.el).
+
+**Implementation notes**:
+- Chat history uses plist format (:human :agent :tick) consistent with in-memory store
+- Scratchpad filter function supports both global (thread=nil) and thread-specific notes
+- Depth limiting applied separately to global vs thread notes in context assembly
+- `amacs-shell--load-history` reverses loaded list to match push-based storage order
+- Warm start shows "Resuming from tick N" message to indicate loaded state

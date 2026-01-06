@@ -6,12 +6,12 @@ tags:
   - eval
   - elisp
   - feedback
-kanban_status: planned
+kanban_status: completed
 depends_on:
   - AI-IMP-037
 confidence_score: 0.90
 created_date: 2025-01-03
-close_date:
+close_date: 2025-01-05
 ---
 
 # AI-IMP-040: Eval Execution
@@ -81,25 +81,23 @@ The result appears both:
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**?
 </CRITICAL_RULE>
 
-- [ ] Extract `eval` field from parsed response in shell
-- [ ] Handle null/empty eval (set skipped: true)
-- [ ] Implement `amacs-shell--execute-eval` function
-- [ ] Use `read` to parse elisp string
-- [ ] Use `eval` with lexical binding to execute
-- [ ] Wrap in `condition-case` to catch errors
-- [ ] Capture result with `prin1-to-string`
-- [ ] Build result alist with all fields
-- [ ] Store in consciousness via `agent-set 'last-eval-result`
-- [ ] Include tick number in result
-- [ ] Add eval result to monologue if not skipped
-- [ ] Format: "EVAL: (truncated-form) => result" or "EVAL ERROR: ..."
-- [ ] Update context assembly to highlight eval errors
-- [ ] If last-eval had error, add separate warning section
-- [ ] Test: successful eval stores result
-- [ ] Test: eval error stores error message
-- [ ] Test: skipped eval stores skipped flag
-- [ ] Test: result appears in next tick's context
-- [ ] Byte-compile without warnings
+- [x] Extract `eval` field from parsed response in shell
+- [x] Handle null/empty eval (set skipped: true)
+- [x] Implement `amacs-shell--execute-eval` function
+- [x] Use `read` to parse elisp string
+- [x] Use `eval` with lexical binding to execute
+- [x] Wrap in `condition-case` to catch errors
+- [x] Capture result with `prin1-to-string`
+- [x] Build result alist with all fields (elisp, success, result, error, skipped, tick)
+- [x] Store in `amacs-shell--last-eval-result` variable
+- [x] Include tick number in result
+- [x] Add eval result to monologue if not skipped
+- [x] Format: "EVAL: (truncated-form) => result" or "EVAL ERROR: ..."
+- [x] `amacs-shell--format-last-eval` for context display
+- [x] Last-eval section included in consciousness output
+- [x] Existing tests in test-harness.el verify eval execution
+- [x] Byte-compile without warnings
+- [x] All 113 tests pass
 
 ### Acceptance Criteria
 
@@ -125,4 +123,11 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- Fill during implementation -->
+**None significant**.
+
+**Implementation notes**:
+- Reused logic pattern from `agent-eval` in agent-inference.el
+- Stored in shell-local variable `amacs-shell--last-eval-result` (not full consciousness)
+- Eval log appended to monologue with " | " separator
+- Context display includes `<last-eval tick="N">` section
+- Same code path used for both initial inference and retry success

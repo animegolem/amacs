@@ -25,6 +25,12 @@
 (declare-function agent-api-call "agent-api")
 (declare-function agent-api-configured-p "agent-api")
 (declare-function agent-load-config "agent-api")
+(declare-function agent-persistence-init "agent-persistence")
+(declare-function agent-chat-append-exchange "agent-persistence")
+(declare-function agent-chat-load-history "agent-persistence")
+(declare-function agent-scratchpad-append "agent-persistence")
+(declare-function agent-scratchpad-load "agent-persistence")
+(declare-function agent-scratchpad-filter-by-thread "agent-persistence")
 
 ;;; Variables
 
@@ -56,6 +62,25 @@ Each entry is a plist (:human STRING :agent STRING :tick NUMBER).")
 
 (defvar amacs-shell--current-tick 0
   "Current tick number for this shell session.")
+
+(defvar amacs-shell--last-eval-result nil
+  "Result of last eval execution.
+Alist with keys: elisp, success, result, error, skipped, tick.")
+
+;;; Thread Management (IMP-041)
+
+(defvar amacs-shell--open-threads nil
+  "List of open thread alists.
+Each thread is ((id . STR) (concern . STR) (buffers . LIST) ...).")
+
+(defvar amacs-shell--completed-threads nil
+  "List of completed thread alists.")
+
+(defvar amacs-shell--max-threads 3
+  "Maximum number of open threads allowed.")
+
+(defvar amacs-shell--active-thread nil
+  "Currently active thread ID, or nil for no thread.")
 
 ;;; Mode Definition
 
@@ -127,16 +152,25 @@ Use this to maintain continuity across turns."
 
 (defun amacs-shell--format-consciousness ()
   "Format current consciousness state for context."
-  (format "<agent-consciousness>
+  (let ((base (format "<agent-consciousness>
 tick: %d
 mood: %s
 confidence: %.2f
 chat-depth: %d
+active-thread: %s
+open-threads: %d
 </agent-consciousness>"
-          amacs-shell--current-tick
-          (or (plist-get amacs-shell--last-response :mood) "awakening")
-          (or (plist-get amacs-shell--last-response :confidence) 0.5)
-          amacs-shell--chat-context-depth))
+                      amacs-shell--current-tick
+                      (or (plist-get amacs-shell--last-response :mood) "awakening")
+                      (or (plist-get amacs-shell--last-response :confidence) 0.5)
+                      amacs-shell--chat-context-depth
+                      (or amacs-shell--active-thread "none")
+                      (length amacs-shell--open-threads)))
+        (eval-section (amacs-shell--format-last-eval))
+        (threads-section (amacs-shell--format-threads)))
+    (concat base
+            (when eval-section (concat "\n\n" eval-section))
+            (when threads-section (concat "\n\n" threads-section)))))
 
 (defun amacs-shell--format-chat-history ()
   "Format chat history for context, respecting depth limit."
@@ -166,14 +200,50 @@ chat-depth: %d
                 (mapconcat #'identity filtered "\n"))
       "")))
 
+(defvar amacs-shell--global-scratchpad-depth 5
+  "Number of global scratchpad headings to include in context.")
+
+(defvar amacs-shell--thread-scratchpad-depth 10
+  "Number of thread-specific scratchpad headings to include.")
+
+(defun amacs-shell--format-scratchpad ()
+  "Format scratchpad notes for context."
+  (require 'agent-persistence)
+  (let* ((all-notes (agent-scratchpad-load))
+         (filtered (agent-scratchpad-filter-by-thread all-notes
+                                                      amacs-shell--active-thread))
+         ;; Separate global and thread notes
+         (global-notes (seq-filter (lambda (n) (null (plist-get n :thread)))
+                                   filtered))
+         (thread-notes (seq-filter (lambda (n) (plist-get n :thread))
+                                   filtered))
+         ;; Apply depth limits (take last N)
+         (recent-global (last global-notes amacs-shell--global-scratchpad-depth))
+         (recent-thread (last thread-notes amacs-shell--thread-scratchpad-depth))
+         (combined (append recent-global recent-thread)))
+    (if combined
+        (format "<scratchpad>\n%s\n</scratchpad>"
+                (mapconcat (lambda (note)
+                             (let ((heading (plist-get note :heading))
+                                   (thread (plist-get note :thread))
+                                   (content (plist-get note :content)))
+                               (if thread
+                                   (format "* [%s] %s\n%s" thread heading content)
+                                 (format "* %s\n%s" heading content))))
+                           combined
+                           "\n\n"))
+      "")))
+
 (defun amacs-shell--build-context (pending-message)
   "Build full context string with PENDING-MESSAGE."
   (let ((consciousness (amacs-shell--format-consciousness))
         (chat (amacs-shell--format-chat-history))
-        (monologue (amacs-shell--format-monologue)))
+        (monologue (amacs-shell--format-monologue))
+        (scratchpad (amacs-shell--format-scratchpad)))
     (concat consciousness "\n\n"
             (unless (string-empty-p chat) (concat chat "\n\n"))
             (unless (string-empty-p monologue) (concat monologue "\n\n"))
+            (unless (string-empty-p scratchpad) (concat scratchpad "\n\n"))
             "Human: " pending-message)))
 
 (defun amacs-shell--record-exchange (human-msg agent-reply monologue)
@@ -183,7 +253,277 @@ chat-depth: %d
               :agent agent-reply
               :monologue monologue
               :tick amacs-shell--current-tick)
-        amacs-shell--chat-history))
+        amacs-shell--chat-history)
+  ;; Persist to disk
+  (require 'agent-persistence)
+  (agent-chat-append-exchange amacs-shell--current-tick human-msg agent-reply))
+
+(defun amacs-shell--handle-scratchpad (scratchpad)
+  "Handle SCRATCHPAD field from agent response.
+SCRATCHPAD is a plist with :heading, :thread, :content."
+  (when scratchpad
+    (let ((heading (plist-get scratchpad :heading))
+          (thread (plist-get scratchpad :thread))
+          (content (plist-get scratchpad :content)))
+      (when (and heading content)
+        (require 'agent-persistence)
+        (agent-scratchpad-append heading thread amacs-shell--current-tick content)))))
+
+;;; Eval Execution (IMP-040)
+
+(defun amacs-shell--execute-eval (elisp-string)
+  "Execute ELISP-STRING, capturing result or error.
+Returns alist with success, result, error, skipped, elisp, tick."
+  (let ((result
+         (if (or (null elisp-string)
+                 (and (stringp elisp-string)
+                      (string-empty-p (string-trim elisp-string))))
+             '((success . t) (result . nil) (error . nil) (skipped . t))
+           (condition-case err
+               (let* ((form (read elisp-string))
+                      (eval-result (eval form t)))  ; t = lexical binding
+                 `((success . t)
+                   (result . ,(prin1-to-string eval-result))
+                   (error . nil)
+                   (skipped . nil)))
+             (error
+              `((success . nil)
+                (result . nil)
+                (error . ,(error-message-string err))
+                (skipped . nil)))))))
+    ;; Add elisp and tick to result
+    `((elisp . ,elisp-string)
+      (tick . ,amacs-shell--current-tick)
+      ,@result)))
+
+(defun amacs-shell--format-eval-for-monologue (eval-result)
+  "Format EVAL-RESULT for monologue entry.
+Returns nil for skipped evals."
+  (unless (alist-get 'skipped eval-result)
+    (let ((elisp (alist-get 'elisp eval-result)))
+      (if (alist-get 'success eval-result)
+          (format "EVAL: %s => %s"
+                  (truncate-string-to-width (or elisp "") 50 nil nil "...")
+                  (truncate-string-to-width
+                   (or (alist-get 'result eval-result) "nil") 30 nil nil "..."))
+        (format "EVAL ERROR: %s => %s"
+                (truncate-string-to-width (or elisp "") 50 nil nil "...")
+                (alist-get 'error eval-result))))))
+
+(defun amacs-shell--format-last-eval ()
+  "Format last-eval-result for context display.
+Returns nil if no eval or eval was skipped."
+  (when amacs-shell--last-eval-result
+    (unless (alist-get 'skipped amacs-shell--last-eval-result)
+      (let* ((tick (alist-get 'tick amacs-shell--last-eval-result))
+             (elisp (alist-get 'elisp amacs-shell--last-eval-result))
+             (success (alist-get 'success amacs-shell--last-eval-result))
+             (result (alist-get 'result amacs-shell--last-eval-result))
+             (err (alist-get 'error amacs-shell--last-eval-result)))
+        (format "<last-eval tick=\"%d\">\nelisp: %s\nsuccess: %s\n%s\n</last-eval>"
+                (or tick 0)
+                (or elisp "nil")
+                (if success "true" "false")
+                (if success
+                    (format "result: %s" (or result "nil"))
+                  (format "error: %s" (or err "unknown"))))))))
+
+;;; Thread API (IMP-041)
+
+(defun agent-create-thread (id &rest args)
+  "Create a new thread with ID.
+ARGS is a plist with optional :concern and :buffers.
+Returns thread alist on success, or signals error on failure."
+  (let ((concern (plist-get args :concern))
+        (buffers (plist-get args :buffers)))
+    ;; Check for duplicate ID
+    (when (cl-find id amacs-shell--open-threads
+                   :key (lambda (thr) (alist-get 'id thr))
+                   :test #'equal)
+      (error "Thread with ID '%s' already exists" id))
+    ;; Enforce max threads
+    (when (>= (length amacs-shell--open-threads) amacs-shell--max-threads)
+      (error "Maximum threads (%d) reached. Complete a thread first"
+             amacs-shell--max-threads))
+    ;; Create thread alist
+    (let ((thread (list (cons 'id id)
+                        (cons 'concern (or concern ""))
+                        (cons 'buffers (or buffers '()))
+                        (cons 'started-tick amacs-shell--current-tick)
+                        (cons 'hydrated nil))))
+      (push thread amacs-shell--open-threads)
+      thread)))
+
+(defun agent-switch-thread (id)
+  "Switch active thread to ID.
+Dehydrates old active thread, hydrates new one."
+  (let ((thread (cl-find id amacs-shell--open-threads
+                         :key (lambda (thr) (alist-get 'id thr))
+                         :test #'equal)))
+    (unless thread
+      (error "Thread '%s' not found" id))
+    ;; Dehydrate old active
+    (when amacs-shell--active-thread
+      (let ((old (cl-find amacs-shell--active-thread amacs-shell--open-threads
+                          :key (lambda (thr) (alist-get 'id thr))
+                          :test #'equal)))
+        (when old
+          (setf (alist-get 'hydrated old) nil))))
+    ;; Hydrate new
+    (setf (alist-get 'hydrated thread) t)
+    (setq amacs-shell--active-thread id)
+    id))
+
+(defun agent-complete-thread (id &rest args)
+  "Complete thread with ID.
+ARGS is a plist with optional :evidence and :learned."
+  (let ((thread (cl-find id amacs-shell--open-threads
+                         :key (lambda (thr) (alist-get 'id thr))
+                         :test #'equal))
+        (evidence (plist-get args :evidence))
+        (learned (plist-get args :learned)))
+    (unless thread
+      (error "Thread '%s' not found" id))
+    ;; Update thread with completion data
+    (setf (alist-get 'completion-tick thread) amacs-shell--current-tick)
+    (setf (alist-get 'completion-evidence thread) evidence)
+    (setf (alist-get 'learned thread) learned)
+    (setf (alist-get 'hydrated thread) nil)
+    ;; Move from open to completed
+    (setq amacs-shell--open-threads
+          (cl-remove id amacs-shell--open-threads
+                     :key (lambda (thr) (alist-get 'id thr))
+                     :test #'equal))
+    (push thread amacs-shell--completed-threads)
+    ;; Clear active if this was active
+    (when (equal amacs-shell--active-thread id)
+      (setq amacs-shell--active-thread nil))
+    thread))
+
+(defun agent-thread-add-buffer (id buffer-name)
+  "Add BUFFER-NAME to thread ID's buffer list."
+  (let ((thread (cl-find id amacs-shell--open-threads
+                         :key (lambda (thr) (alist-get 'id thr))
+                         :test #'equal)))
+    (unless thread
+      (error "Thread '%s' not found" id))
+    (let ((buffers (alist-get 'buffers thread)))
+      (unless (member buffer-name buffers)
+        (setf (alist-get 'buffers thread)
+              (cons buffer-name buffers))))
+    (alist-get 'buffers thread)))
+
+(defun agent-thread-remove-buffer (id buffer-name)
+  "Remove BUFFER-NAME from thread ID's buffer list."
+  (let ((thread (cl-find id amacs-shell--open-threads
+                         :key (lambda (thr) (alist-get 'id thr))
+                         :test #'equal)))
+    (unless thread
+      (error "Thread '%s' not found" id))
+    (setf (alist-get 'buffers thread)
+          (remove buffer-name (alist-get 'buffers thread)))
+    (alist-get 'buffers thread)))
+
+(defun agent-list-threads ()
+  "Return list of open thread IDs."
+  (mapcar (lambda (thr) (alist-get 'id thr))
+          amacs-shell--open-threads))
+
+;;; Git Integration (IMP-042)
+
+(defvar amacs-shell--git-directory "~/.agent/"
+  "Directory containing the agent's git repository.")
+
+(defvar amacs-shell--git-author "AMACS Agent <amacs@localhost>"
+  "Author string for git commits.")
+
+(defvar amacs-shell--last-commit nil
+  "Hash of last git commit, or nil.")
+
+(defun amacs-shell--git-run (&rest args)
+  "Run git command with ARGS in agent directory. Returns output string."
+  (let ((default-directory (expand-file-name amacs-shell--git-directory)))
+    (with-output-to-string
+      (apply #'call-process "git" nil standard-output nil args))))
+
+(defun amacs-shell--git-init ()
+  "Initialize git repository in agent directory if needed."
+  (let ((dir (expand-file-name amacs-shell--git-directory)))
+    (unless (file-directory-p dir)
+      (make-directory dir t))
+    (unless (file-directory-p (expand-file-name ".git" dir))
+      (amacs-shell--git-run "init")
+      ;; Create .gitignore
+      (with-temp-file (expand-file-name ".gitignore" dir)
+        (insert "config.el\n*.elc\n"))
+      (amacs-shell--git-run "add" ".gitignore")
+      (amacs-shell--git-run "commit" "-m" "Initialize agent repository"
+                            "--author" amacs-shell--git-author))))
+
+(defun amacs-shell--git-commit ()
+  "Commit current state with tick-format message."
+  (let* ((tick amacs-shell--current-tick)
+         (thread (or amacs-shell--active-thread "no-thread"))
+         (mood (or (plist-get amacs-shell--last-response :mood) "awakening"))
+         (confidence (or (plist-get amacs-shell--last-response :confidence) 0.5))
+         (monologue (or (plist-get amacs-shell--last-response :monologue) ""))
+         (truncated (if (> (length monologue) 60)
+                        (concat (substring monologue 0 57) "...")
+                      monologue))
+         (message (format "Tick %d ‖ %s ‖ %s ‖ %.2f ‖ %s"
+                          tick thread mood confidence truncated)))
+    ;; Stage all files
+    (amacs-shell--git-run "add" "-A")
+    ;; Check if there are changes
+    (let ((status (string-trim (amacs-shell--git-run "status" "--porcelain"))))
+      (unless (string-empty-p status)
+        (amacs-shell--git-run "commit" "-m" message
+                              "--author" amacs-shell--git-author)
+        (setq amacs-shell--last-commit
+              (string-trim (amacs-shell--git-run "rev-parse" "--short" "HEAD")))))))
+
+(defun amacs-shell--format-threads ()
+  "Format thread info for context display.
+Returns nil if no threads."
+  (when amacs-shell--open-threads
+    (let ((active (when amacs-shell--active-thread
+                    (cl-find amacs-shell--active-thread amacs-shell--open-threads
+                             :key (lambda (thr) (alist-get 'id thr))
+                             :test #'equal)))
+          (pending (cl-remove amacs-shell--active-thread amacs-shell--open-threads
+                              :key (lambda (thr) (alist-get 'id thr))
+                              :test #'equal)))
+      (with-output-to-string
+        (princ "<threads>\n")
+        ;; Active thread (full info)
+        (when active
+          (princ (format "active: %s\n" (alist-get 'id active)))
+          (princ (format "  concern: %s\n" (or (alist-get 'concern active) "")))
+          (princ (format "  buffers: %s\n" (alist-get 'buffers active))))
+        ;; Pending threads (summaries)
+        (when pending
+          (princ "pending:\n")
+          (dolist (thr pending)
+            (princ (format "  - %s: %s\n"
+                           (alist-get 'id thr)
+                           (or (alist-get 'concern thr) "")))))
+        (princ "</threads>")))))
+
+(defun amacs-shell--load-history ()
+  "Load chat history from disk for warm start.
+Populates `amacs-shell--chat-history' and sets tick counter."
+  (require 'agent-persistence)
+  (agent-persistence-init)
+  ;; Ensure git repo exists
+  (amacs-shell--git-init)
+  (let ((loaded (agent-chat-load-history)))
+    (when loaded
+      ;; Chat history is oldest-first, but we push (so want newest-first)
+      (setq amacs-shell--chat-history (reverse loaded))
+      ;; Set tick to max tick found
+      (let ((max-tick (apply #'max (mapcar (lambda (ex) (plist-get ex :tick))
+                                           loaded))))
+        (setq amacs-shell--current-tick max-tick)))))
 
 ;;; Input Handling
 
@@ -236,13 +576,27 @@ Stores input for harness to process and triggers inference."
               ;; Success - show reply and record exchange
               (let ((reply (or (plist-get parsed :reply)
                                (format "[No reply. Mood: %s]"
-                                       (plist-get parsed :mood)))))
+                                       (plist-get parsed :mood))))
+                    (monologue (plist-get parsed :monologue)))
                 (setq amacs-shell--last-response parsed)
+                ;; Execute eval if present (IMP-040)
+                (let* ((eval-form (plist-get parsed :eval))
+                       (eval-result (amacs-shell--execute-eval eval-form))
+                       (eval-log (amacs-shell--format-eval-for-monologue eval-result)))
+                  ;; Store eval result for next tick context
+                  (setq amacs-shell--last-eval-result eval-result)
+                  ;; Append eval log to monologue if applicable
+                  (when eval-log
+                    (setq monologue (concat monologue " | " eval-log))))
                 ;; Record exchange in history
                 (amacs-shell--record-exchange
                  amacs-shell--pending-input
                  reply
-                 (plist-get parsed :monologue))
+                 monologue)
+                ;; Handle scratchpad if present
+                (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
+                ;; Git commit (IMP-042)
+                (amacs-shell--git-commit)
                 ;; Display reply
                 (amacs-shell--insert-response reply)
                 (setq amacs-shell--processing nil)
@@ -289,13 +643,25 @@ Please respond with ONLY valid JSON. Error in: %s]"
         (if parsed
             (let ((reply (or (plist-get parsed :reply)
                              (format "[No reply. Mood: %s]"
-                                     (plist-get parsed :mood)))))
+                                     (plist-get parsed :mood))))
+                  (monologue (plist-get parsed :monologue)))
               (setq amacs-shell--last-response parsed)
+              ;; Execute eval if present (IMP-040)
+              (let* ((eval-form (plist-get parsed :eval))
+                     (eval-result (amacs-shell--execute-eval eval-form))
+                     (eval-log (amacs-shell--format-eval-for-monologue eval-result)))
+                (setq amacs-shell--last-eval-result eval-result)
+                (when eval-log
+                  (setq monologue (concat monologue " | " eval-log))))
               ;; Record exchange
               (amacs-shell--record-exchange
                amacs-shell--pending-input
                reply
-               (plist-get parsed :monologue))
+               monologue)
+              ;; Handle scratchpad if present
+              (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
+              ;; Git commit (IMP-042)
+              (amacs-shell--git-commit)
               (amacs-shell--insert-response reply)
               (setq amacs-shell--processing nil)
               (setq amacs-shell--pending-input nil))
@@ -413,6 +779,8 @@ or nil if parsing fails."
     (with-current-buffer buf
       (unless (derived-mode-p 'amacs-shell-mode)
         (amacs-shell-mode)
+        ;; Load history for warm start
+        (amacs-shell--load-history)
         ;; Set up fake process
         (amacs-shell--setup-fake-process buf)
         ;; Insert initial prompt
@@ -420,7 +788,11 @@ or nil if parsing fails."
               (proc (get-buffer-process buf)))
           (erase-buffer)
           (insert "Welcome to AMACS shell.\n")
-          (insert "Type your message and press RET to send.\n\n")
+          (if (> amacs-shell--current-tick 0)
+              (insert (format "Resuming from tick %d with %d exchanges.\n\n"
+                              amacs-shell--current-tick
+                              (length amacs-shell--chat-history)))
+            (insert "Type your message and press RET to send.\n\n"))
           (let ((prompt-start (point)))
             (insert amacs-shell-prompt)
             (add-text-properties prompt-start (point)
