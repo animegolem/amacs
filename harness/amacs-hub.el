@@ -30,6 +30,16 @@
 
 ;; Forward declare to avoid circular require
 (declare-function agent-think "agent-inference")
+(declare-function amacs-shell "amacs-shell")
+
+;; Forward declare shell variables for v4 state bridge
+(defvar amacs-shell--current-tick)
+(defvar amacs-shell--last-response)
+(defvar amacs-shell--active-thread)
+(defvar amacs-shell--open-threads)
+(defvar amacs-shell--completed-threads)
+(defvar amacs-shell--chat-history)
+(defvar amacs-shell-buffer-name)
 
 ;;; Section Classes
 
@@ -54,6 +64,153 @@
 
 (defvar amacs-hub-buffer-name "*amacs-hub*"
   "Name of the hub buffer.")
+
+;;; State Bridge (IMP-043)
+;;
+;; These functions read state from the v4 shell when available,
+;; falling back to agent-consciousness for v3 compatibility.
+
+(defun amacs-hub--shell-active-p ()
+  "Return non-nil if the v4 shell buffer exists and has state."
+  (and (boundp 'amacs-shell-buffer-name)
+       (get-buffer amacs-shell-buffer-name)
+       (boundp 'amacs-shell--current-tick)))
+
+(defun amacs-hub--get-tick ()
+  "Get current tick from shell or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--current-tick)
+         amacs-shell--current-tick)
+    amacs-shell--current-tick)
+   ((fboundp 'agent-current-tick)
+    (agent-current-tick))
+   (t 0)))
+
+(defun amacs-hub--get-mood ()
+  "Get mood from shell response or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--last-response)
+         amacs-shell--last-response)
+    (or (plist-get amacs-shell--last-response :mood) "awakening"))
+   ((fboundp 'agent-mood)
+    (agent-mood))
+   (t "unknown")))
+
+(defun amacs-hub--get-confidence ()
+  "Get confidence from shell response or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--last-response)
+         amacs-shell--last-response)
+    (or (plist-get amacs-shell--last-response :confidence) 0.5))
+   ((fboundp 'agent-confidence)
+    (agent-confidence))
+   (t 0.5)))
+
+(defun amacs-hub--get-active-thread ()
+  "Get active thread ID from shell or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--active-thread))
+    amacs-shell--active-thread)
+   ((fboundp 'agent-active-thread)
+    (agent-active-thread))
+   (t nil)))
+
+(defun amacs-hub--get-open-threads ()
+  "Get open threads from shell or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--open-threads))
+    amacs-shell--open-threads)
+   ((fboundp 'agent-open-threads)
+    (agent-open-threads))
+   (t nil)))
+
+(defun amacs-hub--get-completed-threads ()
+  "Get completed threads from shell or consciousness."
+  (cond
+   ((and (amacs-hub--shell-active-p)
+         (boundp 'amacs-shell--completed-threads))
+    amacs-shell--completed-threads)
+   (t nil)))
+
+;;; Org File Parsers (IMP-044)
+;;
+;; Parse v4 org files for hub display.
+
+;; Forward declare persistence functions
+(declare-function agent-chat-load-history "agent-persistence")
+(declare-function agent-scratchpad-load "agent-persistence")
+(declare-function agent-persistence-init "agent-persistence")
+(defvar agent-persistence-directory)
+
+(defun amacs-hub--parse-chat-file ()
+  "Parse agent-chat.org for hub display.
+Returns list of alists with tick, human, agent, timestamp."
+  (condition-case nil
+      (progn
+        (require 'agent-persistence)
+        (agent-persistence-init)
+        (let ((history (agent-chat-load-history)))
+          ;; Convert plist format to alist for section display
+          (mapcar (lambda (ex)
+                    `((tick . ,(plist-get ex :tick))
+                      (human . ,(plist-get ex :human))
+                      (agent . ,(plist-get ex :agent))))
+                  history)))
+    (error nil)))
+
+(defun amacs-hub--parse-monologue-file ()
+  "Parse monologue.org for hub display.
+Returns list of alists with tick, timestamp, narrative.
+Most recent first (reversed from file order)."
+  (let ((file (expand-file-name "monologue.org"
+                                (if (boundp 'agent-persistence-directory)
+                                    agent-persistence-directory
+                                  "~/.agent/"))))
+    (if (not (file-exists-p file))
+        nil
+      (with-temp-buffer
+        (insert-file-contents file)
+        (goto-char (point-max))
+        (let ((entries nil)
+              (count 0)
+              (max-entries 50))  ; Limit to recent entries
+          ;; Parse backwards for recent entries first
+          (while (and (< count max-entries)
+                      (re-search-backward
+                       "^\\[\\([^]]+\\)\\]\\[TICK \\([0-9]+\\)\\] \\(.*\\)$"
+                       nil t))
+            (let ((timestamp (match-string 1))
+                  (tick (string-to-number (match-string 2)))
+                  (narrative (match-string 3)))
+              (push `((tick . ,tick)
+                      (timestamp . ,timestamp)
+                      (narrative . ,narrative))
+                    entries))
+            (cl-incf count))
+          ;; Already in most-recent-first order from backward search
+          entries)))))
+
+(defun amacs-hub--parse-scratchpad-file ()
+  "Parse scratchpad.org for hub display.
+Returns list of alists with heading, thread, tick, content."
+  (condition-case nil
+      (progn
+        (require 'agent-persistence)
+        (agent-persistence-init)
+        (let ((notes (agent-scratchpad-load)))
+          ;; Convert plist format to alist for section display
+          (mapcar (lambda (note)
+                    `((heading . ,(plist-get note :heading))
+                      (thread . ,(plist-get note :thread))
+                      (tick . ,(plist-get note :tick))
+                      (content . ,(plist-get note :content))))
+                  notes)))
+    (error nil)))
 
 ;;; Mode Definition
 
@@ -126,20 +283,29 @@
           (find-file skill-path))
       (message "Skill file not found: %s" skill-path))))
 
-(defun amacs-hub--visit-chat-tick (section)
-  "Jump to chat tick heading from SECTION in other window."
-  (let* ((value (oref section value))
-         (buf (alist-get 'buffer value))
-         (tick-num (alist-get 'tick value)))
-    (if (and buf (buffer-live-p buf))
+(defun amacs-hub--visit-chat-header ()
+  "Open or focus the *amacs-shell* buffer.
+Starts shell if not running."
+  (let ((shell-buf (get-buffer "*amacs-shell*")))
+    (if shell-buf
         (progn
           (amacs-hub--ensure-other-window)
-          (switch-to-buffer buf)
-          (goto-char (point-min))
-          (if (re-search-forward (format "^\\* Tick %d" tick-num) nil t)
-              (beginning-of-line)
-            (message "Tick %d heading not found" tick-num)))
-      (message "Chat buffer not available (try 'g' to refresh)"))))
+          (switch-to-buffer shell-buf)
+          (goto-char (point-max)))
+      ;; Start shell if not running
+      (amacs-hub--ensure-other-window)
+      (if (fboundp 'amacs-shell)
+          (amacs-shell)
+        (message "Shell not available - require amacs-shell first")))))
+
+(defun amacs-hub--visit-chat-tick (section)
+  "Open shell and show context for tick in SECTION.
+For v4, just opens the shell since chat is in org file."
+  (let* ((value (oref section value))
+         (tick-num (alist-get 'tick value)))
+    ;; For v4, we open the shell - the tick data is shown in expanded section
+    (amacs-hub--visit-chat-header)
+    (message "Tick %d - see expanded section for details" tick-num)))
 
 (defun amacs-hub--visit-monologue (section)
   "Jump to monologue entry from SECTION in other window."
@@ -177,20 +343,22 @@
 (defun amacs-hub-visit-thing-at-point ()
   "Visit the item at point in other window.
 RET on different sections does different things:
+- Chat header: open *amacs-shell* buffer
+- Chat tick: open shell (tick details shown in expanded section)
 - Thread: switch to that thread
 - Buffer: open buffer in other window
 - Skill: open SKILL.md in other window
-- Chat tick: jump to tick heading in chat buffer
 - Monologue: jump to entry in monologue.org
 - Scratchpad: jump to heading in scratchpad buffer"
   (interactive)
   (let ((section (magit-current-section)))
     (when section
       (pcase (eieio-object-class section)
+        ('amacs-chat-section (amacs-hub--visit-chat-header))
+        ('amacs-chat-tick-section (amacs-hub--visit-chat-tick section))
         ('amacs-thread-section (amacs-hub--visit-thread section))
         ('amacs-buffer-section (amacs-hub--visit-buffer section))
         ('amacs-skill-section (amacs-hub--visit-skill section))
-        ('amacs-chat-tick-section (amacs-hub--visit-chat-tick section))
         ('amacs-monologue-tick-section (amacs-hub--visit-monologue section))
         ('amacs-scratchpad-heading-section (amacs-hub--visit-scratchpad section))
         (_ (message "No action for this section"))))))
@@ -227,17 +395,26 @@ In Skills section: bind skill to active thread."
       (user-error "Press 'a' in Threads, Buffers, or Skills section to add")))))
 
 (defun amacs-hub--add-thread ()
-  "Create a new thread with prompted concern."
-  (let ((concern (read-string "Thread concern: ")))
-    (when (and concern (not (string-empty-p concern)))
-      (let ((thread (agent-create-thread concern)))
-        (agent-add-thread thread t)  ; t = activate
-        (amacs-hub-refresh)
-        (message "Created and activated thread: %s" (alist-get 'id thread))))))
+  "Create a new thread with prompted ID and concern."
+  (let ((thread-id (read-string "Thread ID (short identifier): "))
+        (concern (read-string "Thread concern (optional): ")))
+    (when (and thread-id (not (string-empty-p thread-id)))
+      ;; Use v4 API: ID-first with optional :concern
+      (condition-case err
+          (progn
+            (if (string-empty-p concern)
+                (agent-create-thread thread-id)
+              (agent-create-thread thread-id :concern concern))
+            ;; Switch to new thread to activate it
+            (agent-switch-thread thread-id)
+            (amacs-hub-refresh)
+            (message "Created and activated thread: %s" thread-id))
+        (error
+         (message "Error creating thread: %s" (error-message-string err)))))))
 
 (defun amacs-hub--add-buffer ()
   "Add a buffer to the active thread."
-  (let ((active-id (agent-active-thread)))
+  (let ((active-id (amacs-hub--get-active-thread)))
     (unless active-id
       (user-error "No active thread"))
     (let* ((all-buffers (mapcar #'buffer-name (buffer-list)))
@@ -249,13 +426,15 @@ In Skills section: bind skill to active thread."
 
 (defun amacs-hub--add-skill ()
   "Bind a skill to the active thread."
-  (let ((active-id (agent-active-thread)))
+  (let ((active-id (amacs-hub--get-active-thread)))
     (unless active-id
       (user-error "No active thread"))
-    (let* ((available (agent-list-available-skills))
+    (let* ((available (when (fboundp 'agent-list-available-skills)
+                        (agent-list-available-skills)))
            (skill-name (completing-read "Bind skill: " available nil t)))
       (when skill-name
-        (agent-bind-skill-to-thread skill-name)
+        (when (fboundp 'agent-bind-skill-to-thread)
+          (agent-bind-skill-to-thread skill-name))
         (amacs-hub-refresh)
         (message "Bound skill '%s' to thread" skill-name)))))
 
@@ -278,19 +457,24 @@ On skill: unbind skill from thread."
       (user-error "Press 'k' on a thread, buffer, or skill to remove")))))
 
 (defun amacs-hub--archive-thread (section)
-  "Archive the thread in SECTION."
+  "Complete/archive the thread in SECTION."
   (let* ((value (oref section value))
          (thread-id (if (listp value) (alist-get 'id value) value)))
     (when thread-id
-      (when (yes-or-no-p (format "Archive thread '%s'? " thread-id))
-        (agent-archive-thread thread-id)
-        (amacs-hub-refresh)
-        (message "Archived thread: %s" thread-id)))))
+      (when (yes-or-no-p (format "Complete thread '%s'? " thread-id))
+        ;; Use v4 agent-complete-thread
+        (condition-case err
+            (progn
+              (agent-complete-thread thread-id)
+              (amacs-hub-refresh)
+              (message "Completed thread: %s" thread-id))
+          (error
+           (message "Error completing thread: %s" (error-message-string err))))))))
 
 (defun amacs-hub--remove-buffer (section)
   "Remove the buffer in SECTION from active thread."
   (let* ((buf-name (oref section value))
-         (active-id (agent-active-thread)))
+         (active-id (amacs-hub--get-active-thread)))
     (when (and buf-name active-id)
       (agent-thread-remove-buffer active-id buf-name)
       (amacs-hub-refresh)
@@ -312,14 +496,18 @@ On skill: unbind skill from thread."
          (thread-id (if (eq section-class 'amacs-thread-section)
                         (let ((value (oref section value)))
                           (if (listp value) (alist-get 'id value) value))
-                      (agent-active-thread))))
+                      (amacs-hub--get-active-thread))))
     (unless thread-id
       (user-error "No thread selected or active"))
     (let ((evidence (read-string "Completion evidence: "))
           (learned (read-string "What was learned: ")))
-      (agent-complete-thread thread-id :evidence evidence :learned learned)
-      (amacs-hub-refresh)
-      (message "Completed thread: %s" thread-id))))
+      (condition-case err
+          (progn
+            (agent-complete-thread thread-id :evidence evidence :learned learned)
+            (amacs-hub-refresh)
+            (message "Completed thread: %s" thread-id))
+        (error
+         (message "Error completing thread: %s" (error-message-string err)))))))
 
 (defun amacs-hub-increase-scratchpad-depth ()
   "Increase scratchpad context depth by 1."
@@ -359,7 +547,7 @@ This is a one-shot parameter for deeper reasoning."
 (defun amacs-hub-switch-thread ()
   "Switch to a different thread via completing-read."
   (interactive)
-  (let* ((threads (agent-open-threads))
+  (let* ((threads (amacs-hub--get-open-threads))
          (thread-names (mapcar (lambda (th)
                                  (cons (or (alist-get 'concern th)
                                            (alist-get 'id th))
@@ -477,13 +665,13 @@ This is a one-shot parameter for deeper reasoning."
   "Insert status section showing mood, tick, confidence."
   (magit-insert-section (amacs-status-section)
     (magit-insert-heading "Status")
-    (let ((tick (agent-current-tick))
-          (mood (agent-mood))
-          (confidence (agent-confidence))
-          (thread (agent-active-thread)))
-      (insert (format "  Tick: %d\n" tick))
-      (insert (format "  Mood: %s\n" mood))
-      (insert (format "  Confidence: %.2f\n" confidence))
+    (let ((tick (amacs-hub--get-tick))
+          (mood (amacs-hub--get-mood))
+          (confidence (amacs-hub--get-confidence))
+          (thread (amacs-hub--get-active-thread)))
+      (insert (format "  Tick: %d\n" (or tick 0)))
+      (insert (format "  Mood: %s\n" (or mood "unknown")))
+      (insert (format "  Confidence: %.2f\n" (or confidence 0.5)))
       (insert (format "  Active Thread: %s\n" (or thread "none")))
       (insert "\n"))))
 
@@ -493,8 +681,8 @@ This is a one-shot parameter for deeper reasoning."
   "Insert threads section with active/inactive grouping."
   (magit-insert-section (amacs-threads-section)
     (magit-insert-heading "Threads")
-    (let ((active-id (agent-active-thread))
-          (open-threads (agent-open-threads)))
+    (let ((active-id (amacs-hub--get-active-thread))
+          (open-threads (amacs-hub--get-open-threads)))
       (if (null open-threads)
           (insert "  No threads\n")
         (dolist (thread open-threads)
@@ -513,9 +701,9 @@ This is a one-shot parameter for deeper reasoning."
   "Insert watched buffers section for current thread."
   (magit-insert-section (amacs-buffers-section)
     (magit-insert-heading "Watched Buffers")
-    (let* ((active-id (agent-active-thread))
+    (let* ((active-id (amacs-hub--get-active-thread))
            (thread (seq-find (lambda (th) (equal (alist-get 'id th) active-id))
-                             (agent-open-threads)))
+                             (amacs-hub--get-open-threads)))
            (buffers (when thread (alist-get 'buffers thread))))
       (if (null buffers)
           (insert "  No buffers\n")
@@ -541,169 +729,83 @@ This is a one-shot parameter for deeper reasoning."
 
 ;;; Chat Section
 
-(defun amacs-hub--get-chat-buffers ()
-  "Return list of buffers with `amacs-chat-mode'."
-  (seq-filter (lambda (buf)
-                (with-current-buffer buf
-                  (bound-and-true-p amacs-chat-mode)))
-              (buffer-list)))
-
-(defun amacs-hub--parse-chat-ticks (buffer)
-  "Parse tick headings from chat BUFFER.
-Returns list of alists with tick, human, agent content."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (save-excursion
-        (goto-char (point-min))
-        (let ((ticks '()))
-          (while (re-search-forward "^\\* Tick \\([0-9]+\\)" nil t)
-            (let* ((tick-num (string-to-number (match-string 1)))
-                   (tick-start (match-beginning 0))
-                   (tick-end (save-excursion
-                               (if (re-search-forward "^\\* Tick " nil t)
-                                   (match-beginning 0)
-                                 (point-max))))
-                   (content (buffer-substring-no-properties tick-start tick-end)))
-              (push `((tick . ,tick-num)
-                      (content . ,content)
-                      (buffer . ,buffer))
-                    ticks)))
-          (nreverse ticks))))))
-
 (defun amacs-hub--insert-chat ()
-  "Insert chat section with expandable ticks."
+  "Insert chat section with expandable ticks.
+Reads from agent-chat.org file for v4 architecture."
   (magit-insert-section (amacs-chat-section)
     (magit-insert-heading "Chat")
-    (let ((chat-buffers (amacs-hub--get-chat-buffers)))
-      (if (null chat-buffers)
-          (insert "  No chat buffers\n")
-        (dolist (buf chat-buffers)
-          (magit-insert-section (amacs-chat-buffer-section buf)
-            (insert (format "  %s\n" (buffer-name buf)))
-            (let ((ticks (amacs-hub--parse-chat-ticks buf)))
-              (dolist (tick-data ticks)
-                (let ((tick-num (alist-get 'tick tick-data))
-                      (content (alist-get 'content tick-data)))
-                  (magit-insert-section (amacs-chat-tick-section tick-data t)
-                    (insert (format "    Tick %d\n" tick-num))
-                    (magit-insert-heading)
-                    (insert content)))))))))
+    (let ((exchanges (amacs-hub--parse-chat-file)))
+      (if (null exchanges)
+          (insert "  No chat history\n")
+        ;; Show exchanges in reverse order (most recent first)
+        (dolist (exchange (reverse exchanges))
+          (let ((tick-num (alist-get 'tick exchange))
+                (human (alist-get 'human exchange))
+                (agent (alist-get 'agent exchange)))
+            (magit-insert-section (amacs-chat-tick-section exchange t)
+              (insert (format "  Tick %d\n" tick-num))
+              (magit-insert-heading)
+              ;; Expanded content shows human/agent exchange
+              (insert (format "    Human: %s\n"
+                              (truncate-string-to-width
+                               (replace-regexp-in-string "\n" " " human)
+                               60 nil nil "...")))
+              (insert (format "    Agent: %s\n"
+                              (truncate-string-to-width
+                               (replace-regexp-in-string "\n" " " agent)
+                               60 nil nil "..."))))))))
     (insert "\n")))
 
 ;;; Monologue Section
 
-(defun amacs-hub--get-recent-monologue-ticks ()
-  "Get recent monologue entries with tick info.
-Returns list of alists with tick, narrative, diff."
-  (let ((monologue-depth (or (agent-get 'monologue-context-depth) 20))
-        (entries '()))
-    ;; Parse monologue file for recent entries
-    (let ((file (expand-file-name "~/.agent/monologue.org")))
-      (when (file-exists-p file)
-        (with-temp-buffer
-          (insert-file-contents file)
-          (goto-char (point-max))
-          (let ((count 0))
-            (while (and (< count monologue-depth)
-                        (re-search-backward
-                         "^\\[\\([^]]+\\)\\]\\[TICK \\([0-9]+\\)\\] \\(.*\\)$"
-                         nil t))
-              (let* ((timestamp (match-string 1))
-                     (tick-num (string-to-number (match-string 2)))
-                     (narrative (match-string 3)))
-                (push `((tick . ,tick-num)
-                        (timestamp . ,timestamp)
-                        (narrative . ,narrative))
-                      entries))
-              (cl-incf count))))))
-    entries))
-
 (defun amacs-hub--insert-monologue ()
-  "Insert monologue section with expandable tick entries."
+  "Insert monologue section with recent entries.
+Reads from monologue.org file for v4 architecture."
   (magit-insert-section (amacs-monologue-section)
     (magit-insert-heading "Monologue")
-    (let ((entries (amacs-hub--get-recent-monologue-ticks)))
+    (let ((entries (amacs-hub--parse-monologue-file)))
       (if (null entries)
           (insert "  No monologue entries\n")
         (dolist (entry entries)
           (let* ((tick-num (alist-get 'tick entry))
-                 (narrative (alist-get 'narrative entry))
-                 (diff (agent-get-tick-diff tick-num))
-                 (expanded-content (concat narrative "\n"
-                                          (when diff
-                                            (concat "\nDiff:\n" diff)))))
-            (magit-insert-section (amacs-monologue-tick-section
-                                   (cons `(expanded . ,expanded-content) entry)
-                                   t)
+                 (narrative (alist-get 'narrative entry)))
+            (magit-insert-section (amacs-monologue-tick-section entry t)
               (insert (format "  [%d] %s\n"
                               tick-num
-                              (truncate-string-to-width narrative 60 nil nil "...")))
+                              (truncate-string-to-width
+                               (or narrative "") 60 nil nil "...")))
               (magit-insert-heading)
-              (when expanded-content
-                (insert (format "    %s\n" expanded-content))))))))
+              (when narrative
+                (insert (format "    %s\n" narrative))))))))
     (insert "\n")))
 
 ;;; Scratchpad Section
 
-(defun amacs-hub--get-scratchpad-buffers ()
-  "Return list of buffers with `agent-scratchpad-mode'."
-  (seq-filter (lambda (buf)
-                (with-current-buffer buf
-                  (bound-and-true-p agent-scratchpad-mode)))
-              (buffer-list)))
-
-(defun amacs-hub--parse-scratchpad-headings (buffer)
-  "Extract org headings from BUFFER for hub display."
-  (when (buffer-live-p buffer)
-    (with-current-buffer buffer
-      (save-excursion
-        (goto-char (point-min))
-        (let ((headings '()))
-          (while (re-search-forward "^\\(\\*+\\) \\(.+\\)$" nil t)
-            (let* ((level (length (match-string 1)))
-                   (title (match-string 2))
-                   (begin (match-beginning 0))
-                   (content-begin (1+ (match-end 0)))
-                   (content-end (save-excursion
-                                  (if (re-search-forward "^\\*+ " nil t)
-                                      (match-beginning 0)
-                                    (point-max))))
-                   (content (string-trim
-                             (buffer-substring-no-properties
-                              content-begin content-end))))
-              (push `((title . ,title)
-                      (level . ,level)
-                      (begin . ,begin)
-                      (content . ,content)
-                      (buffer . ,buffer))
-                    headings)))
-          (nreverse headings))))))
-
 (defun amacs-hub--insert-scratchpad ()
-  "Insert scratchpad section with expandable headings."
-  (let ((depth (or (agent-get 'scratchpad-context-depth) 10)))
-    (magit-insert-section (amacs-scratchpad-section)
-      (magit-insert-heading (format "Scratchpad (depth: %s)"
-                                    (if (= depth 0) "all" depth)))
-      (let ((scratchpad-buffers (amacs-hub--get-scratchpad-buffers)))
-        (if (null scratchpad-buffers)
-            (insert "  No scratchpad buffers\n")
-          (dolist (buf scratchpad-buffers)
-            (magit-insert-section (amacs-scratchpad-buffer-section buf)
-              (insert (format "  %s\n" (buffer-name buf)))
-              (let ((headings (amacs-hub--parse-scratchpad-headings buf)))
-                (dolist (heading headings)
-                  (let ((title (alist-get 'title heading))
-                        (level (alist-get 'level heading))
-                        (content (alist-get 'content heading)))
-                    (magit-insert-section (amacs-scratchpad-heading-section heading t)
-                      (insert (format "    %s%s\n"
-                                      (make-string (* 2 (1- level)) ?\s)
-                                      title))
-                      (magit-insert-heading)
-                      (when (and content (not (string-empty-p content)))
-                        (insert (format "      %s\n" content)))))))))))
-      (insert "\n"))))
+  "Insert scratchpad section with expandable headings.
+Reads from scratchpad.org file for v4 architecture."
+  (magit-insert-section (amacs-scratchpad-section)
+    (magit-insert-heading "Scratchpad")
+    (let ((notes (amacs-hub--parse-scratchpad-file)))
+      (if (null notes)
+          (insert "  No scratchpad notes\n")
+        (dolist (note notes)
+          (let ((heading (alist-get 'heading note))
+                (thread (alist-get 'thread note))
+                (content (alist-get 'content note)))
+            ;; Show thread tag if present
+            (let ((thread-tag (if thread
+                                  (format " [%s]" thread)
+                                "")))
+              (magit-insert-section (amacs-scratchpad-heading-section note t)
+                (insert (format "  %s%s\n" heading thread-tag))
+                (magit-insert-heading)
+                (when (and content (not (string-empty-p content)))
+                  (insert (format "    %s\n"
+                                  (truncate-string-to-width
+                                   (replace-regexp-in-string "\n" " " content)
+                                   70 nil nil "..."))))))))))
+    (insert "\n")))
 
 ;;; Main Hub Functions
 

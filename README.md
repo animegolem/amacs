@@ -4,14 +4,14 @@ An experiment in LLM embodiment: an AI agent living in Emacs with persistent con
 
 ## Current Status
 
-**Phase 2 Complete** - The agent has motor control.
+**v4 Architecture Complete** (EPIC-005) - Comint-based shell interface.
 
-- Perceives buffer contents and context
-- Thinks via LLM API (OpenRouter)
-- Returns elisp for evaluation
-- Sees results in next tick
-- Communicates via org-mode chat
-- Binds skills to threads
+- Single `*amacs-shell*` buffer for human-agent interaction
+- JSON response format with eval, reply, scratchpad fields
+- Persistent state: chat history, scratchpad notes, monologue
+- Thread system for organizing work (max 3 active)
+- Git commit every tick (autobiographical memory)
+- Eval execution with result feedback
 
 113 tests passing. CI validates byte-compilation and test suite.
 
@@ -26,38 +26,39 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 # 2. Run tests (no API needed)
 ./harness/ci-check.sh
 
-# 3. In Emacs - initialize agent
+# 3. In Emacs - start the shell
 (add-to-list 'load-path "/path/to/amacs/harness")
-(require 'agent-core)
-(agent-init)
+(require 'amacs-shell)
+(amacs-shell)
 
-# 4. Run integration test (requires API)
-M-x test-eval-loop
+# 4. Type at the prompt, press enter - agent responds
 ```
 
 ## Project Structure
 
 ```
 harness/               # Core elisp - the agent's "nervous system"
+  amacs-shell.el           # v4 comint shell interface (primary entry point)
+  agent-persistence.el     # Serialization to org files
   agent-core.el            # Init, tick, coordination
   agent-consciousness.el   # Working memory, state management
   agent-threads.el         # Thread lifecycle, hydration
   agent-context.el         # Context assembly for inference
   agent-skills.el          # Skill loading and binding
-  agent-inference.el       # Prompt building, API calls, response parsing
-  agent-chat.el            # Human-agent chat interface
+  agent-inference.el       # API calls, response parsing
+  agent-api.el             # OpenRouter API integration
   agent-monologue.el       # Episodic memory
-  agent-tick.el            # Tick system, git commits
-  amacs-hub.el             # Hub dashboard (requires magit-section)
+  agent-tick.el            # Tick system
+  amacs-hub.el             # Hub dashboard (deferred to EPIC-006)
   test-harness.el          # Test suite (113 tests)
   ci-check.sh              # CI pipeline
 
 skills/                # Skills the agent can use
   amacs-bootstrap-skill/
-    core/                  # Bootstrap skill (system prompt)
-    chat/                  # Chat interface skill
+    core/                  # Core skill (system prompt)
 
 RAG/                   # Project documentation
+  RFC/                     # Architecture RFCs
   AI-EPIC/                 # Epic-level planning
   AI-IMP/                  # Implementation tickets
   AI-ADR/                  # Architecture decisions
@@ -67,36 +68,45 @@ RAG/                   # Project documentation
 ## The Loop
 
 ```
-perceive (buffers, threads, context)
+Human types in *amacs-shell*, presses enter
     ↓
-think (API call with system prompt)
+Harness assembles context (consciousness, chat, scratchpad, buffers)
     ↓
-return JSON { eval, thought, mood, confidence, monologue }
+API call with system prompt + context
     ↓
-harness executes eval, captures result/error
+Parse JSON response { eval, reply, mood, confidence, monologue, scratchpad }
     ↓
-next tick: agent sees result in context
+Execute eval (if present), capture result for next tick
     ↓
-repeat
+Display reply in comint, serialize to org files
+    ↓
+Git commit with format: Tick N ‖ thread ‖ mood ‖ confidence ‖ monologue
+    ↓
+Ready for next input
 ```
 
-## Chat Interface
+## Shell Interface
 
-Human communicates via org-mode buffer:
+Human communicates via comint buffer (`*amacs-shell*`):
 
-```org
-* Human Input
-Can you check the current buffer?
+```
+amacs> What's causing the ownership error?
 
-* Agent Response
-** Think
-Reading the user's request...
+Looking at main.rs line 45, the issue is that you're returning
+a reference to a local variable. The 'data' binding goes out of
+scope at the end of the function...
 
-** Output
-I'll examine the buffer now.
+amacs> How do I fix it?
+
+You have two options:
+1. Return an owned value instead of a reference
+2. Use 'static lifetime if the data is truly static
+...
+
+amacs>
 ```
 
-Press `C-c C-c` in chat buffer to send. Agent sees `:chat-pending` flag.
+Type at the prompt, press enter. Agent's reply appears inline.
 
 ## Skills
 
@@ -115,24 +125,20 @@ Skills extend agent capabilities with domain knowledge:
 
 Core skill is always in system prompt. Other skills bind to threads.
 
-## Hub Dashboard
+## Hub Dashboard (Planned)
 
-The hub provides a unified view of agent state using `magit-section`:
+A unified view of agent state using `magit-section`. Deferred to EPIC-006.
 
 ```elisp
 ;; Requires magit-section (install via MELPA)
 M-x package-install RET magit-section RET
 
-;; Open hub
+;; Open hub (when available)
 (require 'amacs-hub)
 M-x amacs-hub
-
-;; Key bindings
-TAB - Expand/collapse section inline
-g   - Refresh hub
 ```
 
-Shows: status, threads, buffers, skills, chat history, monologue, scratchpad.
+Will show: status, threads, buffers, skills, chat history, monologue, scratchpad.
 
 ## Agent Runtime
 
@@ -141,8 +147,12 @@ The agent lives in `~/.agent/`:
 ```
 ~/.agent/
   consciousness.el     # Serialized working memory
-  monologue.org        # Episodic log
+  agent-chat.org       # Chat history (human/agent pairs per tick)
+  scratchpad.org       # Agent notes with thread properties
+  monologue.org        # Episodic log (one line per tick)
+  config.el            # API key and settings (git-ignored)
   skills/              # Installed skills
+    core/              # Core skill (system prompt)
   .git/                # Autobiographical memory (every tick commits)
 ```
 
@@ -182,8 +192,9 @@ cd harness
 emacs -Q -l test-harness.el
 M-x test-run-all
 
-# Integration test (requires API key)
-M-x test-eval-loop
+# Manual testing with real API
+M-x amacs-shell
+# Type a message and press enter
 ```
 
 ## Vision

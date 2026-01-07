@@ -82,6 +82,18 @@ Each thread is ((id . STR) (concern . STR) (buffers . LIST) ...).")
 (defvar amacs-shell--active-thread nil
   "Currently active thread ID, or nil for no thread.")
 
+;;; Hub Integration (IMP-046)
+
+(declare-function amacs-hub-refresh "amacs-hub")
+
+(defun amacs-shell--notify-hub ()
+  "Refresh the hub buffer if it exists.
+Called after each tick to keep hub in sync."
+  (when-let* ((buf (get-buffer "*amacs-hub*")))
+    (with-current-buffer buf
+      (when (fboundp 'amacs-hub-refresh)
+        (amacs-hub-refresh)))))
+
 ;;; Mode Definition
 
 (defvar amacs-shell-mode-map
@@ -599,6 +611,8 @@ Stores input for harness to process and triggers inference."
                 (amacs-shell--git-commit)
                 ;; Display reply
                 (amacs-shell--insert-response reply)
+                ;; Notify hub to refresh (IMP-046)
+                (amacs-shell--notify-hub)
                 (setq amacs-shell--processing nil)
                 (setq amacs-shell--pending-input nil))
             ;; Parse error - retry if possible
@@ -663,6 +677,8 @@ Please respond with ONLY valid JSON. Error in: %s]"
               ;; Git commit (IMP-042)
               (amacs-shell--git-commit)
               (amacs-shell--insert-response reply)
+              ;; Notify hub to refresh (IMP-046)
+              (amacs-shell--notify-hub)
               (setq amacs-shell--processing nil)
               (setq amacs-shell--pending-input nil))
           ;; Still failing - check retry count
