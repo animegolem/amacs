@@ -116,10 +116,17 @@ The agent's working memory. Simplified from v3 to show only what the agent can m
 ### 3.2 Mutability
 
 In pure elisp, we cannot enforce field mutability. The system prompt guides appropriate usage:
-- Agent SHOULD modify: mood, confidence, depths, api-settings
-- Agent SHOULD NOT modify: tick, time, budget (harness-managed)
+- Agent SHOULD modify: mood, confidence, depths
+- Agent SHOULD NOT modify: tick, time, identity (harness-managed)
 
 If we later add an external runtime, enforcement becomes possible.
+
+### 3.3 Deferred Features
+
+The following consciousness fields are deferred until the core system is validated:
+
+- **budget**: Cost tracking and pressure system. Required for autonomous ticks where the agent runs without human oversight. Deferred until autonomous operation is implemented.
+- **api-settings**: Agent-controllable temperature, top-p, max-tokens. Low lift but not required for initial validation.
 
 ## 4. Context Assembly
 
@@ -149,6 +156,16 @@ content...
 * [thread-id] Thread-Specific Note
 content...
 </scratchpad>
+
+<threads>
+Active: rust-debugging
+  concern: Fix ownership error
+  buffers: src/main.rs, src/lib.rs
+  skills: rust-mode
+Pending:
+  - blog-update (Write about lifetimes)
+  - config-cleanup (Refactor settings)
+</threads>
 
 <buffers>
 === filename.rs (rust-mode) ===
@@ -335,7 +352,7 @@ The magit-section based hub from EPIC-004 is deferred to EPIC-006. Focus on core
 
 ## 10. Implementation Phases
 
-### EPIC-005: Core Loop
+### EPIC-005: Core Loop ✓ Complete
 1. Comint shell with fake process
 2. Basic inference (send/receive, no context)
 3. Response parsing and display
@@ -345,14 +362,23 @@ The magit-section based hub from EPIC-004 is deferred to EPIC-006. Focus on core
 7. Thread management
 8. Git commit per tick
 
-### EPIC-006: Human Interface (Future)
+### EPIC-006: Human Interface ✓ Complete
 - Hub dashboard revival
-- Polish and UX improvements
+- Shell/hub integration
 
-### EPIC-007: Async/Optimization (Future)
-- Non-blocking API calls
+### EPIC-007: Consciousness-Driven Architecture (Active)
+- Refactor shell to pure UI (no inline state/inference)
+- Consciousness alist as single source of truth
+- Reconnect to proper inference layer
+- Activate skill system (thread-bound)
+- Buffer hydration for active thread
+- See `AI-EPIC-007-consciousness-driven-architecture.md`
+
+### EPIC-008: Async/Optimization (Future)
+- Non-blocking API calls (url-retrieve with callback)
 - Evaluate if external runtime needed
-- Potential migration path to Python/Rust if elisp hits walls
+- CRDT consideration for multi-process (see `amacs-rfc-concurrency.md`)
+- Potential migration path if elisp hits walls
 
 ## 11. Testing Strategy
 

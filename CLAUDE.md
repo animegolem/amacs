@@ -30,11 +30,46 @@ RAG/               # Project documentation
 
 ## Current Status
 
-**Architecture**: Transitioning from v3 (org-mode prompt blocks) to v4 (comint shell).
-**Active Work**: EPIC-005 - Core Loop Rewrite. See `RAG/AI-EPIC/AI-EPIC-005-core-loop-rewrite.md`.
+**Architecture**: v4 (comint shell) is functional but needs refactoring - see EPIC-007.
+**Completed**: EPIC-005 (Core Loop), EPIC-006 (Human Interface/Hub).
+**Active Work**: EPIC-007 - Consciousness-Driven Architecture. See `RAG/AI-EPIC/AI-EPIC-007-consciousness-driven-architecture.md`.
 **CI Pipeline**: Run `./harness/ci-check.sh` before commits.
 
-The v3 code (EPIC-001 through EPIC-004) is functional but field testing revealed buffer navigation complexity. The v4 rewrite simplifies I/O to a single comint shell.
+The v4 shell works but accidentally reimplemented the inference chain inline, bypassing the consciousness alist and skill system. EPIC-007 will refactor to proper separation: shell as pure UI, consciousness alist as source of truth.
+
+## Implementation Status Map
+
+**ACTIVE (v4 shell uses directly):**
+| Module | Status | Notes |
+|--------|--------|-------|
+| `amacs-shell.el` | Active | Human I/O, but has inline state/inference (needs refactor) |
+| `amacs-hub.el` | Active | Observability dashboard, reads from org files |
+| `agent-api.el` | Active | HTTP calls to OpenRouter |
+| `agent-persistence.el` | Active | Chat/scratchpad org file I/O |
+
+**V3 LEGACY (exists but not wired to v4 shell):**
+| Module | Status | Notes |
+|--------|--------|-------|
+| `agent-consciousness.el` | Unused by shell | Full alist state management - shell has own vars |
+| `agent-context.el` | Unused by shell | Context assembly with buffer hydration |
+| `agent-skills.el` | Unused by shell | Skill loading/binding - not connected |
+| `agent-threads.el` | Unused by shell | Thread lifecycle - shell reimplemented inline |
+| `agent-inference.el` | Unused by shell | Proper inference layer with skill loading |
+| `agent-tick.el` | Unused by shell | Tick management - shell has own counter |
+| `agent-chat.el` | Deprecated | v3 org-mode chat buffer interface |
+| `agent-monologue.el` | Partial | Shell writes monologue but doesn't use module |
+| `agent-core.el` | Unused by shell | Init/coordination - shell self-initializes |
+| `agent-scratchpad.el` | Partial | Used via persistence, not directly |
+
+**EPIC-007 TARGET STATE:**
+- Shell → pure UI (triggers tick, displays reply)
+- `agent-consciousness.el` → source of truth for all state
+- `agent-inference.el` → context assembly + API call
+- `agent-skills.el` → core skill = system prompt, bound skills load with threads
+- `agent-context.el` → buffer hydration for active thread
+
+**KEY ARCHITECTURAL INSIGHT:**
+The agent is not a chatbot in a buffer. The agent lives in the consciousness alist. The shell is one I/O channel. The agent can run multiple ticks without replying (autonomous work), updating scratchpad/threads/buffers. The hub provides observability for both human and agent.
 
 ## RAG Documentation Conventions
 
@@ -81,15 +116,16 @@ Performs:
 ## Key Files to Read
 
 Before major work:
-- `RAG/RFC/amacs-rfc-v4-transition.md` - Current architecture (v4 comint-based)
-- `RAG/AI-EPIC/AI-EPIC-005-core-loop-rewrite.md` - Active epic
+- `RAG/AI-EPIC/AI-EPIC-007-consciousness-driven-architecture.md` - Active epic
+- `RAG/RFC/amacs-rfc-v4-transition.md` - v4 architecture (partially implemented)
+- `RAG/RFC/amacs-rfc-concurrency.md` - Async options (future consideration)
 - `RAG/AI-LOG/` - Latest session handoffs
-- `draft-prompt.md` - System prompt design (becomes core skill)
+- `RAG/draft-prompt.md` - Target system prompt (needs updating post-EPIC-007)
 
-For reference (v3, partially superseded):
-- `archive/amacs-rfc-v3.org` - Original architecture vision
-- `harness/agent-threads.el` - Thread model (being updated)
-- `skills/amacs-bootstrap-skill/core/SKILL.md` - Current core skill
+For reference:
+- `harness/amacs-shell.el` - Current working code (but needs refactor)
+- `harness/agent-inference.el` - v3 inference layer (target to reconnect)
+- `skills/amacs-bootstrap-skill/core/SKILL.md` - v3 core skill (reference)
 
 ## Agent Runtime Directory
 
