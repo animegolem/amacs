@@ -92,7 +92,8 @@ Uses symbol keys for clean alist-get access patterns."
     ;; Context depth controls (agent can adjust these)
     (chat-context-depth . 5)
     (monologue-context-depth . 20)
-    (scratchpad-context-depth . 10)  ; last N headings, 0 = all
+    (global-scratchpad-depth . 5)   ; last N global headings
+    (thread-scratchpad-depth . 10)  ; last N thread-specific headings
 
     ;; API settings (agent can modify for self-tuning)
     (api-settings . ((temperature . 1.0)
