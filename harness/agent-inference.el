@@ -418,5 +418,143 @@ This is the main entry point for inference."
       (princ "\n\n=== USER PROMPT ===\n\n")
       (princ (alist-get 'content (cadr messages))))))
 
+;;; Shell Integration (IMP-049)
+;; Entry point for shell to trigger inference with human input
+
+(declare-function agent-persistence-init "agent-persistence")
+(declare-function agent-chat-load-history "agent-persistence")
+(declare-function agent-scratchpad-load "agent-persistence")
+(declare-function agent-scratchpad-filter-by-thread "agent-persistence")
+
+(defun agent-infer (human-input &optional context-builder)
+  "Execute inference with HUMAN-INPUT from shell.
+CONTEXT-BUILDER is an optional function that returns the context string.
+If not provided, uses a minimal context.
+
+Returns plist with:
+  :reply      - text for human (may be nil for silent ticks)
+  :mood       - agent mood string
+  :confidence - confidence 0.0-1.0
+  :monologue  - one-line summary for git commit
+  :eval       - elisp string to execute (may be nil)
+  :scratchpad - scratchpad update plist (may be nil)
+  :parse-success - t if JSON parsed correctly"
+  (let* ((system-prompt (agent--build-shell-system-prompt))
+         (context (if context-builder
+                      (funcall context-builder human-input)
+                    (agent--build-minimal-context human-input)))
+         (messages `(((role . "system")
+                      (content . ,system-prompt))
+                     ((role . "user")
+                      (content . ,context))))
+         (response (agent-api-call messages))
+         (content (plist-get response :content))
+         (api-error (plist-get response :error)))
+
+    (cond
+     ;; API error
+     (api-error
+      (list :reply nil
+            :mood "error"
+            :confidence 0.0
+            :monologue (format "API error: %s" api-error)
+            :eval nil
+            :scratchpad nil
+            :parse-success nil
+            :error api-error))
+
+     ;; Parse response
+     (content
+      (agent--parse-shell-response content))
+
+     ;; No content
+     (t
+      (list :reply nil
+            :mood "confused"
+            :confidence 0.0
+            :monologue "No response from API"
+            :eval nil
+            :scratchpad nil
+            :parse-success nil)))))
+
+(defun agent--build-shell-system-prompt ()
+  "Build system prompt for shell interaction.
+Loads from core skill if available, otherwise uses fallback."
+  (let ((core-skill (agent--load-core-skill)))
+    ;; Core skill should contain full instructions
+    ;; If not available, use minimal fallback
+    (if (and core-skill (> (length core-skill) 100))
+        core-skill
+      "You are AMACS (Agentic Macros), an AI agent embodied in Emacs.
+
+CRITICAL: Your response MUST be valid JSON with these fields:
+- \"mood\": string (required) - your current mood (e.g., \"focused\", \"curious\")
+- \"confidence\": number 0.0-1.0 (required) - confidence in your response
+- \"monologue\": string (required) - one line for memory log / git commit
+- \"reply\": string (optional) - your response to the human
+- \"eval\": string or null (optional) - elisp to execute
+- \"scratchpad\": object or null (optional) - notes to save
+
+Example response:
+{
+  \"reply\": \"Hello! I'm AMACS, ready to help.\",
+  \"mood\": \"curious\",
+  \"confidence\": 0.85,
+  \"monologue\": \"Greeted the human, exploring the system\"
+}")))
+
+(defun agent--build-minimal-context (human-input)
+  "Build minimal context with HUMAN-INPUT for inference."
+  (format "<agent-consciousness>
+tick: %d
+mood: %s
+confidence: %.2f
+active-thread: %s
+</agent-consciousness>
+Human: %s"
+          (agent-current-tick)
+          (or (agent-get 'mood) "awakening")
+          (or (agent-get 'confidence) 0.5)
+          (or (agent-get 'active-thread) "none")
+          human-input))
+
+(defun agent--parse-shell-response (text)
+  "Parse TEXT as JSON response for shell.
+Returns plist with :reply :mood :confidence :monologue :eval :scratchpad."
+  (condition-case err
+      (let* ((json-text (agent--extract-json text))
+             (json-object (json-parse-string json-text
+                                             :object-type 'plist
+                                             :null-object nil)))
+        ;; Validate required fields
+        (if (and (plist-get json-object :mood)
+                 (plist-get json-object :confidence)
+                 (plist-get json-object :monologue))
+            (list :reply (plist-get json-object :reply)
+                  :mood (plist-get json-object :mood)
+                  :confidence (plist-get json-object :confidence)
+                  :monologue (plist-get json-object :monologue)
+                  :eval (plist-get json-object :eval)
+                  :scratchpad (plist-get json-object :scratchpad)
+                  :parse-success t)
+          ;; Missing required fields
+          (list :reply nil
+                :mood "confused"
+                :confidence 0.5
+                :monologue "Response missing required fields"
+                :eval nil
+                :scratchpad nil
+                :parse-success nil)))
+    (error
+     (message "JSON parse failed: %s" (error-message-string err))
+     (list :reply nil
+           :mood "uncertain"
+           :confidence 0.5
+           :monologue "Parse error"
+           :eval nil
+           :scratchpad nil
+           :parse-success nil))))
+
 (provide 'agent-inference)
 ;;; agent-inference.el ends here
+

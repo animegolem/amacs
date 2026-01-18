@@ -21,6 +21,7 @@
 (require 'json)
 (require 'cl-lib)
 (require 'agent-consciousness)
+(require 'agent-inference)
 
 ;; Forward declarations to avoid circular requires
 (declare-function agent-api-call "agent-api")
@@ -550,86 +551,61 @@ Stores input for harness to process and triggers inference."
     ;; Run inference (async-ish via run-at-time to let UI update)
     (run-at-time 0.01 nil #'amacs-shell--do-inference 0)))
 
-(defun amacs-shell--do-inference (retry-count)
-  "Execute inference with RETRY-COUNT for error recovery."
-  (require 'agent-api)
-  ;; Ensure API is configured
-  (agent-load-config)
-  (if (not (agent-api-configured-p))
-      (progn
-        (amacs-shell--insert-response
-         "[Error: API not configured. Set OPENROUTER_API_KEY or create ~/.agent/config.el]")
+(defun amacs-shell--do-inference (_retry-count)
+  "Execute inference via agent-inference layer.
+RETRY-COUNT is kept for API compatibility but not currently used."
+  ;; Call inference layer with shell's context builder
+  (let ((parsed (agent-infer amacs-shell--pending-input
+                             #'amacs-shell--build-context)))
+    (cond
+     ;; API error
+     ((plist-get parsed :error)
+      (amacs-shell--insert-response
+       (format "[API Error: %s]" (plist-get parsed :error)))
+      (setq amacs-shell--processing nil)
+      (setq amacs-shell--pending-input nil))
+
+     ;; Parse success
+     ((plist-get parsed :parse-success)
+      (let ((reply (or (plist-get parsed :reply)
+                       (format "[No reply. Mood: %s]"
+                               (plist-get parsed :mood))))
+            (monologue (plist-get parsed :monologue)))
+        (setq amacs-shell--last-response parsed)
+        ;; Store mood/confidence in consciousness
+        (agent-set 'mood (plist-get parsed :mood))
+        (agent-set 'confidence (plist-get parsed :confidence))
+        ;; Execute eval if present (IMP-040)
+        (let* ((eval-form (plist-get parsed :eval))
+               (eval-result (amacs-shell--execute-eval eval-form))
+               (eval-log (amacs-shell--format-eval-for-monologue eval-result)))
+          ;; Store eval result for next tick context
+          (agent-set 'last-eval-result eval-result)
+          ;; Append eval log to monologue if applicable
+          (when eval-log
+            (setq monologue (concat monologue " | " eval-log))))
+        ;; Record exchange in history
+        (amacs-shell--record-exchange
+         amacs-shell--pending-input
+         reply
+         monologue)
+        ;; Handle scratchpad if present
+        (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
+        ;; Git commit (IMP-042)
+        (amacs-shell--git-commit)
+        ;; Display reply
+        (amacs-shell--insert-response reply)
+        ;; Notify hub to refresh (IMP-046)
+        (amacs-shell--notify-hub)
         (setq amacs-shell--processing nil)
-        (setq amacs-shell--pending-input nil))
-    ;; Build messages and call API
-    (let* ((messages (amacs-shell--build-messages amacs-shell--pending-input))
-           (response (agent-api-call messages))
-           (content (plist-get response :content))
-           (api-error (plist-get response :error)))
-      (cond
-       ;; API error
-       (api-error
-        (amacs-shell--insert-response
-         (format "[API Error: %s]" api-error))
-        (setq amacs-shell--processing nil)
-        (setq amacs-shell--pending-input nil))
-       ;; Parse the response
-       (content
-        (let ((parsed (amacs-shell--parse-response content)))
-          (if parsed
-              ;; Success - show reply and record exchange
-              (let ((reply (or (plist-get parsed :reply)
-                               (format "[No reply. Mood: %s]"
-                                       (plist-get parsed :mood))))
-                    (monologue (plist-get parsed :monologue)))
-                (setq amacs-shell--last-response parsed)
-                ;; Store mood/confidence in consciousness
-                (agent-set 'mood (plist-get parsed :mood))
-                (agent-set 'confidence (plist-get parsed :confidence))
-                ;; Execute eval if present (IMP-040)
-                (let* ((eval-form (plist-get parsed :eval))
-                       (eval-result (amacs-shell--execute-eval eval-form))
-                       (eval-log (amacs-shell--format-eval-for-monologue eval-result)))
-                  ;; Store eval result for next tick context
-                  (agent-set 'last-eval-result eval-result)
-                  ;; Append eval log to monologue if applicable
-                  (when eval-log
-                    (setq monologue (concat monologue " | " eval-log))))
-                ;; Record exchange in history
-                (amacs-shell--record-exchange
-                 amacs-shell--pending-input
-                 reply
-                 monologue)
-                ;; Handle scratchpad if present
-                (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
-                ;; Git commit (IMP-042)
-                (amacs-shell--git-commit)
-                ;; Display reply
-                (amacs-shell--insert-response reply)
-                ;; Notify hub to refresh (IMP-046)
-                (amacs-shell--notify-hub)
-                (setq amacs-shell--processing nil)
-                (setq amacs-shell--pending-input nil))
-            ;; Parse error - retry if possible
-            (if (< retry-count amacs-shell--max-retries)
-                (progn
-                  (amacs-shell--update-status
-                   (format "[Parse error, retrying %d/%d...]"
-                           (1+ retry-count) amacs-shell--max-retries))
-                  (run-at-time 0.1 nil #'amacs-shell--do-inference-retry
-                               (1+ retry-count) content))
-              ;; Max retries exceeded
-              (amacs-shell--insert-response
-               (format "[Parse error after %d retries. Raw response:\n%s]"
-                       amacs-shell--max-retries
-                       (substring content 0 (min 500 (length content)))))
-              (setq amacs-shell--processing nil)
-              (setq amacs-shell--pending-input nil)))))
-       ;; No content
-       (t
-        (amacs-shell--insert-response "[No response from API]")
-        (setq amacs-shell--processing nil)
-        (setq amacs-shell--pending-input nil))))))
+        (setq amacs-shell--pending-input nil)))
+
+     ;; Parse failure
+     (t
+      (amacs-shell--insert-response
+       (format "[Parse error: %s]" (plist-get parsed :monologue)))
+      (setq amacs-shell--processing nil)
+      (setq amacs-shell--pending-input nil)))))
 
 (defun amacs-shell--do-inference-retry (retry-count failed-response)
   "Retry inference with RETRY-COUNT, informing agent of FAILED-RESPONSE."
