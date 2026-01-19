@@ -661,7 +661,34 @@
   (let ((section (agent--load-thread-skills)))
     (test-log "no-skills-no-section"
               (null section)
-              "no bound skills returns nil")))
+              "no bound skills returns nil"))
+
+  ;; IMP-051: Test binding skill and verifying it appears in context
+  (when (member "chat" (agent-list-available-skills))
+    ;; Bind chat skill to active thread
+    (agent-bind-skill-to-thread "chat")
+
+    ;; Verify skill is in thread's bound-skills
+    (test-log "skill-bound-to-thread"
+              (member "chat" (agent-thread-bound-skills))
+              "chat skill bound to thread")
+
+    ;; Verify load-thread-skills returns content
+    (let ((skills-section (agent--load-thread-skills)))
+      (test-log "bound-skill-loads-content"
+                (and skills-section (string-match-p "chat" skills-section))
+                "bound skill content loaded"))
+
+    ;; Verify skill content appears in full context
+    (let* ((ctx (agent-build-context))
+           (active-thread (alist-get 'active-thread ctx))
+           (skills (alist-get 'skills active-thread)))
+      (test-log "skill-in-context"
+                (and skills (string-match-p "chat" skills))
+                "skill content in context"))
+
+    ;; Cleanup: unbind skill for other tests
+    (agent-unbind-skill-from-thread "chat")))
 
 (defun test-context-depth-controls ()
   "Test: Context depth controls (IMP-028)."

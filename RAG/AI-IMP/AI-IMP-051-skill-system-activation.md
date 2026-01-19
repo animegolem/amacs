@@ -6,13 +6,13 @@ tags:
   - EPIC-007
   - skills
   - threads
-kanban_status: backlog
+kanban_status: done
 depends_on:
   - AI-IMP-050
   - AI-IMP-048
-confidence_score: 0.7
+confidence_score: 0.95
 created_date: 2025-01-11
-close_date:
+close_date: 2025-01-19
 ---
 
 # AI-IMP-051-skill-system-activation
@@ -62,22 +62,22 @@ Thread alist already has `bound-skills` field per v3 design. Need to:
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**?
 </CRITICAL_RULE>
 
-- [ ] Review `agent-skills.el` current implementation
-- [ ] Verify `agent-list-available-skills` scans `~/.agent/skills/` subdirectories
-- [ ] Each subdirectory with SKILL.md is a valid skill
-- [ ] Return list of skill names (directory names)
-- [ ] Implement/verify `agent-bind-skill-to-thread (skill-name &optional thread-id)`
-- [ ] Defaults to active thread if thread-id nil
-- [ ] Updates thread's `bound-skills` list in consciousness
-- [ ] Errors if skill doesn't exist or thread doesn't exist
-- [ ] Implement `agent-unbind-skill-from-thread (skill-name &optional thread-id)`
-- [ ] Implement `agent-load-skill-content (skill-name)` - reads SKILL.md
-- [ ] Update `agent-context.el` to include `<skills>` section
-- [ ] Get active thread's bound-skills list
-- [ ] For each bound skill, load content and format
-- [ ] Core skill NOT included here (it's the system prompt)
-- [ ] Test: bind skill, verify it appears in context
-- [ ] Run CI: `./harness/ci-check.sh`
+- [x] Review `agent-skills.el` current implementation (already complete from v3)
+- [x] Verify `agent-list-available-skills` scans `~/.agent/skills/` subdirectories (agent-skills.el:85-96)
+- [x] Each subdirectory with SKILL.md is a valid skill (confirmed)
+- [x] Return list of skill names (directory names) (excludes "core")
+- [x] Implement/verify `agent-bind-skill-to-thread (skill-name &optional thread-id)` (agent-skills.el:135-148)
+- [x] Defaults to active thread if thread-id nil (confirmed)
+- [x] Updates thread's `bound-skills` list in consciousness (via agent--update-thread)
+- [x] Errors if skill doesn't exist or thread doesn't exist (tested)
+- [x] Implement `agent-unbind-skill-from-thread (skill-name &optional thread-id)` (agent-skills.el:150-159)
+- [x] Implement `agent-load-skill-content (skill-name)` - reads SKILL.md (agent-skills.el:100-112)
+- [x] Update `agent-context.el` to include `<skills>` section (fixed line 103: use agent--load-thread-skills)
+- [x] Get active thread's bound-skills list (agent--load-thread-skills)
+- [x] For each bound skill, load content and format (agent-skills.el:169-183)
+- [x] Core skill NOT included here (it's the system prompt) (confirmed)
+- [x] Test: bind skill, verify it appears in context (test-harness.el: 3 new tests)
+- [x] Run CI: `./harness/ci-check.sh` - 116/116 tests pass
 
 ### Acceptance Criteria
 
@@ -101,4 +101,14 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- This section filled during implementation -->
+**Mostly pre-implemented**: The skill system was ~95% complete from v3 development. All binding/unbinding functions existed and worked. The thread alist already had the `bound-skills` field.
+
+**One-line bug in context assembly**: The only code change needed was in `agent-context.el` line 103. The function `agent--build-active-thread-context` was calling `agent-skills-for-context` (which uses mode/buffer-based skill resolution) instead of `agent--load-thread-skills` (which uses thread-bound skills). Changed to:
+```elisp
+(skills-content (agent--load-thread-skills))
+```
+
+**Tests added**: Added 3 new tests to `test-skill-binding`:
+- `skill-bound-to-thread`: Verify binding adds skill to thread
+- `bound-skill-loads-content`: Verify `agent--load-thread-skills` returns content
+- `skill-in-context`: Verify skill content appears in `agent-build-context`

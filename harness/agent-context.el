@@ -99,8 +99,8 @@ Agent needs full self-visibility for effective self-management."
     (let* ((buffers (alist-get 'buffers thread))
            (skill-tags (alist-get 'skill-tags thread))
            (hydrated-buffers (agent-hydrate-buffers buffers))
-           ;; Load skills for this thread's tags
-           (skills-content (agent-skills-for-context)))
+           ;; Load skills bound to this thread (IMP-051)
+           (skills-content (agent--load-thread-skills)))
       `((id . ,(alist-get 'id thread))
         (concern . ,(alist-get 'concern thread))
         (goal . ,(alist-get 'goal thread))
