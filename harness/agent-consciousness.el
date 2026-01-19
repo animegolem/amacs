@@ -94,6 +94,7 @@ Uses symbol keys for clean alist-get access patterns."
     (monologue-context-depth . 20)
     (global-scratchpad-depth . 5)   ; last N global headings
     (thread-scratchpad-depth . 10)  ; last N thread-specific headings
+    (buffer-content-limit . 10000)  ; max chars per buffer in context
 
     ;; API settings (agent can modify for self-tuning)
     (api-settings . ((temperature . 1.0)

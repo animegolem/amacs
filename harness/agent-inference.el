@@ -107,12 +107,18 @@ Returns nil if no eval or eval was skipped."
 
 (defun agent--format-buffer-for-prompt (buffer-alist)
   "Format a hydrated BUFFER-ALIST for inclusion in prompt.
-No truncation - trust the LLM's token budget to handle large buffers."
-  (let ((name (alist-get 'name buffer-alist))
-        (content (alist-get 'content buffer-alist))
-        (mode (alist-get 'mode buffer-alist)))
-    (if (and content (> (length content) 0))
-        (format "=== %s (%s) ===\n%s\n" name mode content)
+Truncates content exceeding `buffer-content-limit' from consciousness."
+  (let* ((name (alist-get 'name buffer-alist))
+         (content (alist-get 'content buffer-alist))
+         (mode (alist-get 'mode buffer-alist))
+         (limit (or (agent-get 'buffer-content-limit) 10000))
+         (truncated-content
+          (when (and content (> (length content) 0))
+            (if (> (length content) limit)
+                (concat (substring content 0 limit) "\n[...truncated...]")
+              content))))
+    (if truncated-content
+        (format "=== %s (%s) ===\n%s\n" name mode truncated-content)
       (format "=== %s (%s) === [empty]\n" name mode))))
 
 (defun agent--format-thread-for-prompt (thread-summary)

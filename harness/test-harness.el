@@ -465,6 +465,60 @@
               (listp (alist-get 'global-buffers ctx))
               "has global-buffers list")))
 
+;;; IMP-052 Tests: Buffer Hydration
+
+(defun test-buffer-hydration ()
+  "Test: Buffer content hydration in context (IMP-052)."
+  (message "\n--- Test: Buffer Hydration ---")
+  (require 'agent-context)
+  (require 'agent-inference)
+
+  ;; Test 1: Buffer content appears in context
+  (let* ((test-buf (get-buffer-create "*hydration-test*"))
+         (old-active (agent-get :active-thread)))
+    (with-current-buffer test-buf
+      (erase-buffer)
+      (insert "Test buffer content for hydration"))
+    ;; Create thread with this buffer and switch to it
+    (let ((thread (agent-create-thread "hydration-test" '("*hydration-test*"))))
+      (agent-add-thread thread)
+      (agent-switch-thread (alist-get 'id thread)))
+    (let* ((ctx (agent-build-context))
+           (active-thread (alist-get 'active-thread ctx))
+           (buffers (alist-get 'buffers active-thread)))
+      (test-log "buffer-content-hydrated"
+                (and buffers
+                     (cl-some (lambda (b)
+                                (and (equal (alist-get 'name b) "*hydration-test*")
+                                     (string-match-p "Test buffer content"
+                                                     (or (alist-get 'content b) ""))))
+                              buffers))
+                "buffer content in context"))
+    ;; Switch back and cleanup
+    (when old-active (agent-switch-thread old-active))
+    (kill-buffer test-buf))
+
+  ;; Test 2: Missing buffer handled gracefully
+  (let ((missing-result (agent-hydrate-buffer "nonexistent-buffer-xyz")))
+    (test-log "missing-buffer-nil"
+              (null missing-result)
+              "missing buffer returns nil"))
+
+  ;; Test 3: Buffer truncation
+  (let* ((test-buf (get-buffer-create "*truncation-test*"))
+         (original-limit (agent-get 'buffer-content-limit)))
+    (agent-set 'buffer-content-limit 100)  ; small limit for test
+    (with-current-buffer test-buf
+      (erase-buffer)
+      (insert (make-string 500 ?x)))  ; 500 chars exceeds limit
+    (let* ((hydrated (agent-hydrate-buffer "*truncation-test*"))
+           (formatted (agent--format-buffer-for-prompt hydrated)))
+      (test-log "buffer-truncated"
+                (string-match-p "\\[...truncated...\\]" formatted)
+                "large buffer truncated"))
+    (agent-set 'buffer-content-limit original-limit)
+    (kill-buffer test-buf)))
+
 ;;; IMP-017 Tests: JSON Response Protocol
 
 (defun test-json-parsing ()
@@ -1019,6 +1073,7 @@ Run with M-x test-eval-error-handling."
         (test-thread-switching)
         (test-global-buffers)
         (test-context-assembly)
+        (test-buffer-hydration)
         (test-json-parsing)
         (test-eval-execution)
         (test-context-integration)
@@ -1059,6 +1114,7 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-thread-switching)
           (test-global-buffers)
           (test-context-assembly)
+          (test-buffer-hydration)
           (test-json-parsing)
           (test-eval-execution)
           (test-context-integration)
