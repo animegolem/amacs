@@ -33,6 +33,7 @@
 (declare-function agent-scratchpad-append "agent-persistence")
 (declare-function agent-scratchpad-load "agent-persistence")
 (declare-function agent-scratchpad-filter-by-thread "agent-persistence")
+(declare-function agent-monologue-append "agent-monologue")  ; IMP-055
 
 ;;; Variables
 
@@ -546,6 +547,8 @@ Stores input for harness to process and triggers inference."
              (not (string-empty-p amacs-shell--pending-input))
              (not amacs-shell--processing))
     (setq amacs-shell--processing t)
+    ;; IMP-056: Reset autonomous tick counter on human input
+    (agent-set 'autonomous-tick-counter 0)
     ;; Show thinking indicator
     (amacs-shell--insert-output "\n[Thinking...]\n")
     ;; Run inference (async-ish via run-at-time to let UI update)
@@ -567,9 +570,7 @@ RETRY-COUNT is kept for API compatibility but not currently used."
 
      ;; Parse success
      ((plist-get parsed :parse-success)
-      (let ((reply (or (plist-get parsed :reply)
-                       (format "[No reply. Mood: %s]"
-                               (plist-get parsed :mood))))
+      (let ((reply (plist-get parsed :reply))  ; IMP-055: No fallback - reply optional
             (monologue (plist-get parsed :monologue)))
         (setq amacs-shell--last-response parsed)
         ;; Store mood/confidence in consciousness
@@ -584,21 +585,41 @@ RETRY-COUNT is kept for API compatibility but not currently used."
           ;; Append eval log to monologue if applicable
           (when eval-log
             (setq monologue (concat monologue " | " eval-log))))
-        ;; Record exchange in history
-        (amacs-shell--record-exchange
-         amacs-shell--pending-input
-         reply
-         monologue)
         ;; Handle scratchpad if present
         (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
-        ;; Git commit (IMP-042)
-        (amacs-shell--git-commit)
-        ;; Display reply
-        (amacs-shell--insert-response reply)
+        ;; IMP-055: Conditional behavior based on reply presence
+        (if reply
+            ;; Reply present: full exchange flow
+            (progn
+              ;; Record exchange in history (increments tick)
+              (amacs-shell--record-exchange
+               amacs-shell--pending-input
+               reply
+               monologue)
+              ;; Git commit (IMP-042)
+              (amacs-shell--git-commit)
+              ;; Display reply
+              (amacs-shell--insert-response reply)
+              ;; Clear pending input - exchange complete
+              (setq amacs-shell--pending-input nil))
+          ;; No reply: silent tick (IMP-055)
+          ;; Increment tick, commit state, but don't display or record exchange
+          (agent-increment-tick)
+          ;; Write monologue for silent tick
+          (when monologue
+            (require 'agent-monologue)
+            (agent-monologue-append monologue))
+          ;; Git commit with silent tick state
+          (amacs-shell--git-commit)
+          ;; Clear [Thinking...] indicator silently
+          (amacs-shell--clear-thinking-indicator)
+          ;; Keep pending input - human prompt remains pending
+          )
         ;; Notify hub to refresh (IMP-046)
         (amacs-shell--notify-hub)
-        (setq amacs-shell--processing nil)
-        (setq amacs-shell--pending-input nil)))
+        ;; IMP-056: Handle autonomous tick continuation
+        (amacs-shell--handle-continue (plist-get parsed :continue))
+        (setq amacs-shell--processing nil)))
 
      ;; Parse failure
      (t
@@ -626,9 +647,7 @@ Please respond with ONLY valid JSON. Error in: %s]"
      (content
       (let ((parsed (amacs-shell--parse-response content)))
         (if parsed
-            (let ((reply (or (plist-get parsed :reply)
-                             (format "[No reply. Mood: %s]"
-                                     (plist-get parsed :mood))))
+            (let ((reply (plist-get parsed :reply))  ; IMP-055: No fallback
                   (monologue (plist-get parsed :monologue)))
               (setq amacs-shell--last-response parsed)
               ;; Store mood/confidence in consciousness
@@ -641,20 +660,30 @@ Please respond with ONLY valid JSON. Error in: %s]"
                 (agent-set 'last-eval-result eval-result)
                 (when eval-log
                   (setq monologue (concat monologue " | " eval-log))))
-              ;; Record exchange
-              (amacs-shell--record-exchange
-               amacs-shell--pending-input
-               reply
-               monologue)
               ;; Handle scratchpad if present
               (amacs-shell--handle-scratchpad (plist-get parsed :scratchpad))
-              ;; Git commit (IMP-042)
-              (amacs-shell--git-commit)
-              (amacs-shell--insert-response reply)
+              ;; IMP-055: Conditional behavior based on reply presence
+              (if reply
+                  (progn
+                    ;; Record exchange
+                    (amacs-shell--record-exchange
+                     amacs-shell--pending-input
+                     reply
+                     monologue)
+                    ;; Git commit (IMP-042)
+                    (amacs-shell--git-commit)
+                    (amacs-shell--insert-response reply)
+                    (setq amacs-shell--pending-input nil))
+                ;; Silent tick - no reply
+                (agent-increment-tick)
+                (when monologue
+                  (require 'agent-monologue)
+                  (agent-monologue-append monologue))
+                (amacs-shell--git-commit)
+                (amacs-shell--clear-thinking-indicator))
               ;; Notify hub to refresh (IMP-046)
               (amacs-shell--notify-hub)
-              (setq amacs-shell--processing nil)
-              (setq amacs-shell--pending-input nil))
+              (setq amacs-shell--processing nil))
           ;; Still failing - check retry count
           (if (< retry-count amacs-shell--max-retries)
               (run-at-time 0.1 nil #'amacs-shell--do-inference-retry
@@ -738,6 +767,48 @@ or nil if parsing fails."
           (delete-region (line-beginning-position) (point))
           (insert text)
           (set-marker (process-mark proc) (point)))))))
+
+(defun amacs-shell--clear-thinking-indicator ()
+  "Clear the [Thinking...] indicator without inserting any response.
+Used for silent ticks (IMP-055) where agent processes without replying."
+  (let ((buf (get-buffer amacs-shell-buffer-name)))
+    (when (buffer-live-p buf)
+      (with-current-buffer buf
+        (let ((inhibit-read-only t)
+              (proc (get-buffer-process buf)))
+          (goto-char (process-mark proc))
+          ;; Delete the [Thinking...] line
+          (delete-region (line-beginning-position) (point)))))))
+
+(defun amacs-shell--handle-continue (continue-flag)
+  "Handle autonomous tick continuation based on CONTINUE-FLAG.
+If CONTINUE-FLAG is truthy and counter is below limit, schedule another tick.
+Implements IMP-056 autonomous tick mechanism."
+  (when continue-flag
+    (let* ((counter (or (agent-get 'autonomous-tick-counter) 0))
+           (limit (or (agent-get 'autonomous-tick-limit) 10)))
+      (if (< counter limit)
+          ;; Below limit: schedule another tick
+          (progn
+            ;; Increment counter
+            (agent-set 'autonomous-tick-counter (1+ counter))
+            ;; Schedule next tick with short delay for UI responsiveness
+            (run-at-time 0.1 nil #'amacs-shell--trigger-autonomous-tick))
+        ;; At limit: log warning, don't schedule
+        (message "[AMACS] Autonomous tick limit (%d) reached. Waiting for human input." limit)
+        (require 'agent-monologue)
+        (agent-monologue-append
+         (format "Autonomous tick limit (%d) reached - pausing for human input" limit))))))
+
+(defun amacs-shell--trigger-autonomous-tick ()
+  "Trigger an autonomous tick (no new human input).
+Called by `amacs-shell--handle-continue' when agent requests continuation."
+  (unless amacs-shell--processing
+    (setq amacs-shell--processing t)
+    ;; Show brief indicator
+    (amacs-shell--insert-output "\n[Continuing...]\n")
+    ;; Run inference with existing pending input (or nil for pure autonomous)
+    (run-at-time 0.01 nil #'amacs-shell--do-inference 0)))
 
 (defun amacs-shell--insert-response (response)
   "Insert agent RESPONSE and new prompt."

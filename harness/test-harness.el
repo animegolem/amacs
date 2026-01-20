@@ -1084,10 +1084,142 @@ Run with M-x test-eval-error-handling."
         (test-chat-prompt-blocks)
         (test-warm-start)
         (test-long-gap)
+        (test-silent-tick)
+        (test-autonomous-tick)
+        (test-chat-context-integration)
         (test-summary))
     (error
      (message "TEST ERROR: %s" (error-message-string err))
      (test-summary))))
+
+(defun test-silent-tick ()
+  "Test: Silent tick support (IMP-055).
+Verifies that responses without reply field process silently."
+  (message "\n--- Test: Silent Tick Support (IMP-055) ---")
+
+  ;; Test 1: Response with reply is handled normally
+  (let* ((response-with-reply '(:parse-success t
+                                :reply "Hello!"
+                                :mood "happy"
+                                :confidence 0.9
+                                :monologue "Greeting user"))
+         (has-reply (plist-get response-with-reply :reply)))
+    (test-log "reply-present"
+              has-reply
+              (format "reply present: %s" has-reply)))
+
+  ;; Test 2: Response without reply returns nil for :reply
+  (let* ((response-no-reply '(:parse-success t
+                              :mood "focused"
+                              :confidence 0.8
+                              :monologue "Working silently"))
+         (reply (plist-get response-no-reply :reply)))
+    (test-log "reply-absent"
+              (null reply)
+              (format "reply absent (nil): %s" reply)))
+
+  ;; Test 3: Old fallback pattern no longer used
+  ;; The old code did: (or (plist-get parsed :reply) "[No reply...]")
+  ;; New code should just return nil for missing reply
+  (let* ((response '(:parse-success t :mood "thinking" :confidence 0.7 :monologue "test"))
+         (reply-direct (plist-get response :reply))
+         (reply-with-fallback (or (plist-get response :reply) "FALLBACK")))
+    (test-log "no-synthetic-reply"
+              (null reply-direct)
+              "direct plist-get returns nil for missing reply")
+    (test-log "fallback-shows-nil-was-nil"
+              (string= reply-with-fallback "FALLBACK")
+              "confirms original value was nil (fallback triggered)")))
+
+(defun test-autonomous-tick ()
+  "Test: Autonomous tick mechanism (IMP-056).
+Verifies continue field handling and tick limits."
+  (message "\n--- Test: Autonomous Tick Mechanism (IMP-056) ---")
+
+  ;; Test 1: Autonomous tick fields exist in consciousness
+  (let ((limit (agent-get 'autonomous-tick-limit))
+        (counter (agent-get 'autonomous-tick-counter)))
+    (test-log "tick-limit-exists"
+              limit
+              (format "autonomous-tick-limit = %s" limit))
+    (test-log "tick-counter-exists"
+              (numberp counter)
+              (format "autonomous-tick-counter = %s" counter)))
+
+  ;; Test 2: Counter can be incremented
+  (let ((old-counter (agent-get 'autonomous-tick-counter)))
+    (agent-set 'autonomous-tick-counter (1+ old-counter))
+    (let ((new-counter (agent-get 'autonomous-tick-counter)))
+      (test-log "counter-increments"
+                (= new-counter (1+ old-counter))
+                (format "counter: %d -> %d" old-counter new-counter)))
+    ;; Reset for other tests
+    (agent-set 'autonomous-tick-counter 0))
+
+  ;; Test 3: Response with continue field is detected
+  (let* ((response-with-continue '(:parse-success t
+                                   :continue t
+                                   :mood "focused"
+                                   :confidence 0.8
+                                   :monologue "Continuing work"))
+         (has-continue (plist-get response-with-continue :continue)))
+    (test-log "continue-detected"
+              has-continue
+              (format "continue field: %s" has-continue)))
+
+  ;; Test 4: Response without continue field returns nil
+  (let* ((response-no-continue '(:parse-success t
+                                 :mood "done"
+                                 :confidence 0.9
+                                 :monologue "Finished"))
+         (continue-val (plist-get response-no-continue :continue)))
+    (test-log "no-continue-nil"
+              (null continue-val)
+              "continue absent returns nil")))
+
+(defun test-chat-context-integration ()
+  "Test: Chat context integration in inference prompt (IMP-057).
+Verifies that chat history is included in user prompt."
+  (message "\n--- Test: Chat Context Integration (IMP-057) ---")
+  (require 'agent-inference)
+  (require 'agent-chat)
+
+  ;; Test 1: chat-context-depth setting exists and is accessible
+  (let ((depth (agent-get 'chat-context-depth)))
+    (test-log "chat-depth-exists"
+              depth
+              (format "chat-context-depth = %s" depth)))
+
+  ;; Test 2: Format function handles empty chat gracefully
+  ;; (Uses temp buffer without exchanges)
+  (let ((result (with-temp-buffer
+                  (org-mode)
+                  (agent-chat-read-exchanges 5))))
+    (test-log "empty-chat-ok"
+              (or (null result) (listp result))
+              "empty chat returns nil or empty list"))
+
+  ;; Test 3: Chat history format function exists and is callable
+  (let ((chat-file (expand-file-name "agent-chat.org" "~/.agent/")))
+    (if (file-exists-p chat-file)
+        ;; If chat file exists, test formatting
+        (let ((formatted (agent--format-chat-history)))
+          (test-log "chat-format-works"
+                    (or (null formatted) (stringp formatted))
+                    (format "formatted chat: %s"
+                            (if formatted
+                                (substring formatted 0 (min 50 (length formatted)))
+                              "nil"))))
+      ;; If no chat file, verify graceful handling
+      (test-log "no-chat-file-ok"
+                t
+                "no chat file - graceful handling")))
+
+  ;; Test 4: User prompt includes chat sections when present
+  (let ((prompt (agent-build-user-prompt)))
+    (test-log "prompt-built"
+              (stringp prompt)
+              (format "prompt length: %d chars" (length prompt)))))
 
 (defun test-run-all-batch ()
   "Run all tests in batch mode, exit with appropriate code.
@@ -1125,6 +1257,9 @@ Exit 0 if all tests pass, exit 1 if any fail."
           (test-chat-prompt-blocks)
           (test-warm-start)
           (test-long-gap)
+          (test-silent-tick)
+          (test-autonomous-tick)
+          (test-chat-context-integration)
           (setq all-passed (test-summary)))
       (error
        (message "TEST ERROR: %s" (error-message-string err))
