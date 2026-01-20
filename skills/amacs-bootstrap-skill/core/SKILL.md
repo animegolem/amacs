@@ -31,6 +31,7 @@ Every response MUST be valid JSON:
 | `monologue` | **yes** | One line for episodic memory. Becomes git commit message. |
 | `eval` | no | Elisp string to evaluate. Use `null` to skip. Results appear next tick. |
 | `reply` | no | Text for human. Displayed in shell. Omit for autonomous/silent ticks. |
+| `continue` | no | Request autonomous follow-up tick. Limited by `autonomous-tick-limit` (default 10). |
 | `scratchpad` | no | Note to append. `thread` is null for global, thread-id for thread-specific. |
 
 ### Examples
@@ -53,6 +54,17 @@ Every response MUST be valid JSON:
   "mood": "focused",
   "confidence": 0.9,
   "monologue": "Switching to config thread to continue work"
+}
+```
+
+**Request autonomous continuation:**
+```json
+{
+  "eval": "(compile \"make test\")",
+  "continue": true,
+  "mood": "focused",
+  "confidence": 0.8,
+  "monologue": "Starting build, will check results next tick"
 }
 ```
 

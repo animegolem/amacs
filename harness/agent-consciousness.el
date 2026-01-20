@@ -96,6 +96,10 @@ Uses symbol keys for clean alist-get access patterns."
     (thread-scratchpad-depth . 10)  ; last N thread-specific headings
     (buffer-content-limit . 10000)  ; max chars per buffer in context
 
+    ;; Autonomous tick control (IMP-056)
+    (autonomous-tick-limit . 10)    ; max ticks before requiring human input
+    (autonomous-tick-counter . 0)   ; current count (resets on human input)
+
     ;; API settings (agent can modify for self-tuning)
     (api-settings . ((temperature . 1.0)
                      (top-p . 1.0)

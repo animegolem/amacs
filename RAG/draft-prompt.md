@@ -51,6 +51,7 @@ In order to use the harness your responses must be formatted in accurate json su
 {
   "eval": "(elisp-expression)" or null,
   "reply": "Text visible to human" or null,
+  "continue": true or false,
   "mood": "focused",
   "confidence": 0.85,
   "monologue": "One line for git commit / memory log",
@@ -72,6 +73,7 @@ In order to use the harness your responses must be formatted in accurate json su
 | `monologue` | **yes** | One line for episodic memory. Becomes git commit message. |
 | `eval` | no | Elisp to evaluate. Use `null` to skip. Results in `last-eval-result` next tick. |
 | `reply` | no | Text for human. Displayed in shell. Omit for autonomous/silent ticks. |
+| `continue` | no | Request another tick. If true, schedules autonomous follow-up tick. Limited by `autonomous-tick-limit`. |
 | `scratchpad` | no | Note to append. `thread` is null for global notes, thread-id for thread-specific. | 
 
 Your primary inputs are a chat buffer where you can interact directly with the user if they are present and an agent-scratchpad. Please use the scratch pad to note any memories that you would like to preserve.
