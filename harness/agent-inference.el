@@ -28,6 +28,8 @@
 
 ;; Forward declarations to avoid circular requires
 (declare-function agent--load-thread-skills "agent-skills")
+(declare-function agent-chat-read-exchanges "agent-chat")       ; IMP-057
+(declare-function agent-chat-find-pending-prompt "agent-chat")  ; IMP-057
 (declare-function amacs-chat--start-status-updates "agent-chat")
 (declare-function amacs-chat--stop-status-updates "agent-chat")
 (defvar agent-initialized)
@@ -128,6 +130,50 @@ Truncates content exceeding `buffer-content-limit' from consciousness."
           (or (alist-get 'concern thread-summary) "unnamed")
           (or (alist-get 'started-tick thread-summary) 0)))
 
+;;; Chat History Integration (IMP-057)
+
+(defun agent--format-chat-history ()
+  "Format recent chat exchanges for inclusion in prompt.
+Reads `chat-context-depth' from consciousness and formats last N exchanges.
+Returns formatted string or nil if no exchanges."
+  (require 'agent-chat)
+  (let* ((depth (or (agent-get 'chat-context-depth) 5))
+         (chat-file (expand-file-name "agent-chat.org" "~/.agent/"))
+         (exchanges
+          (when (file-exists-p chat-file)
+            (with-temp-buffer
+              (insert-file-contents chat-file)
+              (org-mode)
+              (agent-chat-read-exchanges depth)))))
+    (when exchanges
+      (mapconcat
+       (lambda (ex)
+         (let ((tick (alist-get 'tick ex))
+               (human (alist-get 'human ex))
+               (agent-reply (alist-get 'agent ex)))
+           (format "[Tick %d]\nHuman: %s\nAgent: %s"
+                   tick
+                   (or human "[no message]")
+                   (or agent-reply "[no response]"))))
+       exchanges
+       "\n\n"))))
+
+(defun agent--format-pending-prompt ()
+  "Format pending (unreplied) human prompt if any exists.
+Returns formatted string or nil if no pending prompt."
+  (require 'agent-chat)
+  (let* ((chat-file (expand-file-name "agent-chat.org" "~/.agent/"))
+         (pending
+          (when (file-exists-p chat-file)
+            (with-temp-buffer
+              (insert-file-contents chat-file)
+              (org-mode)
+              (agent-chat-find-pending-prompt)))))
+    (when pending
+      (let ((content (alist-get 'content pending)))
+        (when content
+          (format "[PENDING - Awaiting Response]\nHuman: %s" content))))))
+
 (defun agent-build-user-prompt ()
   "Build the user prompt from current context."
   (let* ((ctx (agent-build-context))
@@ -170,6 +216,14 @@ Truncates content exceeding `buffer-content-limit' from consciousness."
       (push (format "## Recent Monologue\n%s"
                     (mapconcat #'identity monologue "\n"))
             sections))
+
+    ;; Chat history (IMP-057) - respects chat-context-depth
+    (when-let* ((chat-history (agent--format-chat-history)))
+      (push (format "## Chat History\n%s" chat-history) sections))
+
+    ;; Pending human prompt (IMP-057) - shows awaiting response
+    (when-let* ((pending-prompt (agent--format-pending-prompt)))
+      (push (format "## Current Prompt\n%s" pending-prompt) sections))
 
     ;; Last actions
     (when last-actions
