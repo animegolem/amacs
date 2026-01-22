@@ -6,13 +6,13 @@ tags:
   - EPIC-007
   - buffers
   - context
-kanban_status: backlog
+kanban_status: done
 depends_on:
   - AI-IMP-048
   - AI-IMP-049
-confidence_score: 0.8
+confidence_score: 0.95
 created_date: 2025-01-11
-close_date:
+close_date: 2025-01-19
 ---
 
 # AI-IMP-052-buffer-hydration
@@ -64,21 +64,21 @@ Need to ensure this is called during context assembly.
 Before marking an item complete on the checklist MUST **stop** and **think**. Have you validated all aspects are **implemented** and **tested**?
 </CRITICAL_RULE>
 
-- [ ] Review `agent-context.el` for existing hydration code
-- [ ] Verify `agent--hydrate-buffer` works for open buffers
-- [ ] Handle buffer-not-found case (return placeholder or skip)
-- [ ] Add `agent--format-buffers-section` function
-- [ ] Gets active thread from consciousness
-- [ ] Gets buffer list from thread's `buffers` field
-- [ ] Hydrates each buffer
-- [ ] Formats as `=== name (mode) ===\n{content}`
-- [ ] Add buffer content limit setting (default 10000 chars per buffer)
-- [ ] Truncate with `[...truncated...]` marker
-- [ ] Include `<buffers>` section in context assembly
-- [ ] Only for active thread (pending threads don't hydrate)
-- [ ] Test: add buffer to thread, verify content in context
-- [ ] Test: buffer not open, verify graceful handling
-- [ ] Run CI: `./harness/ci-check.sh`
+- [x] Review `agent-context.el` for existing hydration code (agent-hydrate-buffer:33-44, agent-hydrate-buffers:46-50)
+- [x] Verify `agent--hydrate-buffer` works for open buffers (returns alist with content, mode, point)
+- [x] Handle buffer-not-found case (return placeholder or skip) (returns nil, filtered by seq-filter)
+- [x] Add `agent--format-buffers-section` function (inline in agent-inference.el:108-122)
+- [x] Gets active thread from consciousness (agent-context.el:135)
+- [x] Gets buffer list from thread's `buffers` field (agent-context.el:99)
+- [x] Hydrates each buffer (agent-context.el:101)
+- [x] Formats as `=== name (mode) ===\n{content}` (agent-inference.el:121)
+- [x] Add buffer content limit setting (default 10000 chars per buffer) (agent-consciousness.el:97)
+- [x] Truncate with `[...truncated...]` marker (agent-inference.el:118)
+- [x] Include `<buffers>` section in context assembly (agent-inference.el:150-156)
+- [x] Only for active thread (pending threads don't hydrate) (agent-context.el:115-117 uses thread-summary)
+- [x] Test: add buffer to thread, verify content in context (test-buffer-hydration)
+- [x] Test: buffer not open, verify graceful handling (missing-buffer-nil test)
+- [x] Run CI: `./harness/ci-check.sh` - 119/119 tests pass
 
 ### Acceptance Criteria
 
@@ -104,4 +104,15 @@ Before marking an item complete on the checklist MUST **stop** and **think**. Ha
 
 ### Issues Encountered
 
-<!-- This section filled during implementation -->
+**Mostly pre-implemented**: Like IMP-050 and IMP-051, buffer hydration was ~90% complete from v3. The hydration functions existed (`agent-hydrate-buffer`, `agent-hydrate-buffers`), buffers were already being hydrated in context assembly, and the prompt formatter already had the correct `=== name (mode) ===` format.
+
+**Added truncation**: The only functional change was adding buffer content truncation:
+- Added `buffer-content-limit` to consciousness defaults (10000 chars)
+- Modified `agent--format-buffer-for-prompt` to read the limit and truncate with `[...truncated...]` marker
+
+**Test required thread switching**: Initial test failed because `agent-create-thread` doesn't automatically switch to the new thread. Fixed by calling `agent-add-thread` and `agent-switch-thread` after creation.
+
+**Added 3 tests** (119 total):
+- `buffer-content-hydrated`: Verify content appears in context
+- `missing-buffer-nil`: Verify graceful handling of missing buffers
+- `buffer-truncated`: Verify large buffer truncation works

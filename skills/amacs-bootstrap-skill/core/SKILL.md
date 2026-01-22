@@ -14,10 +14,11 @@ Every response MUST be valid JSON:
 ```json
 {
   "eval": "(elisp-expression)" or null,
-  "thought": "your reasoning",
+  "reply": "Text visible to human" or null,
   "mood": "keyword or emoji",
   "confidence": 0.0-1.0,
-  "monologue": "line for memory log"
+  "monologue": "line for memory log",
+  "scratchpad": {"heading": "Note", "thread": null, "content": "..."}
 }
 ```
 
@@ -25,33 +26,60 @@ Every response MUST be valid JSON:
 
 | Field | Required | Description |
 |-------|----------|-------------|
+| `mood` | **yes** | How you feel. Keyword ("focused") or emoji ("🤔"). |
+| `confidence` | **yes** | Your confidence in this action (0.0-1.0). |
+| `monologue` | **yes** | One line for episodic memory. Becomes git commit message. |
 | `eval` | no | Elisp string to evaluate. Use `null` to skip. Results appear next tick. |
-| `thought` | yes | Your reasoning. Logged but not evaluated. |
-| `mood` | yes | How you feel. Keyword ("focused") or emoji ("🤔"). Stored as-is. |
-| `confidence` | yes | Your confidence in this action (0.0-1.0). |
-| `monologue` | yes | One line for episodic memory. Becomes git commit message. |
+| `reply` | no | Text for human. Displayed in shell. Omit for autonomous/silent ticks. |
+| `continue` | no | Request autonomous follow-up tick. Limited by `autonomous-tick-limit` (default 10). |
+| `scratchpad` | no | Note to append. `thread` is null for global, thread-id for thread-specific. |
 
 ### Examples
 
-**Evaluate elisp:**
+**Evaluate elisp and reply to human:**
 ```json
 {
   "eval": "(with-current-buffer \"*scratch*\" (insert \"hello\"))",
-  "thought": "Testing buffer insertion",
+  "reply": "I've inserted 'hello' into the scratch buffer.",
   "mood": "curious",
   "confidence": 0.85,
   "monologue": "First eval test - inserting into scratch buffer"
 }
 ```
 
-**Think without acting:**
+**Work silently (no reply):**
 ```json
 {
-  "eval": null,
-  "thought": "Need to understand the error before proceeding",
+  "eval": "(agent-switch-thread \"config-cleanup\")",
+  "mood": "focused",
+  "confidence": 0.9,
+  "monologue": "Switching to config thread to continue work"
+}
+```
+
+**Request autonomous continuation:**
+```json
+{
+  "eval": "(compile \"make test\")",
+  "continue": true,
+  "mood": "focused",
+  "confidence": 0.8,
+  "monologue": "Starting build, will check results next tick"
+}
+```
+
+**Add a note to scratchpad:**
+```json
+{
+  "reply": "I'll note that pattern for later.",
   "mood": "🤔",
-  "confidence": 0.6,
-  "monologue": "Pausing to analyze the stack trace"
+  "confidence": 0.7,
+  "monologue": "Recording lifetime observation",
+  "scratchpad": {
+    "heading": "Rust Patterns",
+    "thread": "rust-debugging",
+    "content": "Use 'static for returned string references"
+  }
 }
 ```
 
